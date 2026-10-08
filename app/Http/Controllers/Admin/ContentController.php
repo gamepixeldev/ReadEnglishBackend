@@ -13,29 +13,100 @@ use Illuminate\View\View;
 
 class ContentController extends Controller
 {
-    public function index(Request $request, HtmlContentSanitizer $sanitizer): View
+    public function index(Request $request): RedirectResponse
     {
         $tab = $request->query('tab') === 'words' ? 'words' : 'articles';
-        $articles = DB::table('reading_items')->where('kind', 'article')->orderByDesc('updated_at')->limit(100)->get();
-        $words = DB::table('words')->orderBy('headword')->limit(300)->get();
-        $article = $request->integer('id') ? DB::table('reading_items')->where('id', $request->integer('id'))->where('kind', 'article')->first() : null;
-        $word = $request->integer('id') ? DB::table('words')->where('id', $request->integer('id'))->first() : null;
+        $id = $request->integer('id');
+        $create = $request->query('id') === 'new';
 
-        if (! $article && $tab === 'articles') $article = $articles->first();
-        if (! $word && $tab === 'words') $word = $words->first();
+        if ($tab === 'words') {
+            return redirect()->route($create ? 'admin.words.create' : ($id ? 'admin.words.edit' : 'admin.words.index'), $id ? ['id' => $id] : []);
+        }
+
+        return redirect()->route($create ? 'admin.articles.create' : ($id ? 'admin.articles.edit' : 'admin.articles.index'), $id ? ['id' => $id] : []);
+    }
+
+    public function dashboard(): View
+    {
+        return view('admin.dashboard', [
+            'articleCount' => DB::table('reading_items')->where('kind', 'article')->count(),
+            'publishedArticles' => DB::table('reading_items')->where('kind', 'article')->where('status', 'published')->count(),
+            'wordCount' => DB::table('words')->count(),
+            'publishedWords' => DB::table('words')->where('status', 'published')->count(),
+            'userCount' => DB::table('users')->where('is_admin', false)->count(),
+            'latestArticles' => DB::table('reading_items')->where('kind', 'article')->orderByDesc('updated_at')->orderByDesc('id')->limit(5)->get(),
+            'latestWords' => DB::table('words')->orderByDesc('updated_at')->orderByDesc('id')->limit(5)->get(),
+        ]);
+    }
+
+    public function articles(Request $request): View
+    {
+        $search = trim((string) $request->query('q', ''));
+        $status = in_array($request->query('status'), ['draft', 'published'], true) ? $request->query('status') : null;
+        $query = DB::table('reading_items')->where('kind', 'article');
+        if ($search !== '') {
+            $query->where(function ($query) use ($search): void {
+                $query->where('title', 'like', '%'.$search.'%')
+                    ->orWhere('translation', 'like', '%'.$search.'%');
+            });
+        }
+        if ($status) $query->where('status', $status);
+
+        return view('admin.articles.index', [
+            'articles' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'search' => $search,
+            'status' => $status,
+        ]);
+    }
+
+    public function articleForm(HtmlContentSanitizer $sanitizer, ?int $id = null): View
+    {
+        $article = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first() : null;
+        if ($id) abort_unless($article, 404);
 
         if ($article) {
             $article->body = json_decode($article->body_json, true) ?: [];
-            $article->analysis = DB::table('reading_analyses')->where('reading_item_id', $article->id)->first();
+            $article->analysis = DB::table('reading_analyses')->where('reading_item_id', $id)->first();
             if ($article->analysis?->type === 'richtext') $article->analysis->html = $sanitizer->clean($article->analysis->html ?? '');
-            $article->wordIds = DB::table('reading_words')->where('reading_item_id', $article->id)->orderBy('sort_order')->pluck('word_id')->map(fn ($id): int => (int) $id)->all();
+            $article->wordIds = DB::table('reading_words')->where('reading_item_id', $id)->orderBy('sort_order')->pluck('word_id')->map(fn ($id): int => (int) $id)->all();
         }
+
+        return view('admin.articles.form', [
+            'article' => $article,
+            'words' => DB::table('words')->orderBy('headword')->get(),
+        ]);
+    }
+
+    public function words(Request $request): View
+    {
+        $search = trim((string) $request->query('q', ''));
+        $status = in_array($request->query('status'), ['draft', 'published'], true) ? $request->query('status') : null;
+        $query = DB::table('words');
+        if ($search !== '') {
+            $query->where(function ($query) use ($search): void {
+                $query->where('headword', 'like', '%'.$search.'%')
+                    ->orWhere('meaning', 'like', '%'.$search.'%');
+            });
+        }
+        if ($status) $query->where('status', $status);
+
+        return view('admin.words.index', [
+            'words' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'search' => $search,
+            'status' => $status,
+        ]);
+    }
+
+    public function wordForm(HtmlContentSanitizer $sanitizer, ?int $id = null): View
+    {
+        $word = $id ? DB::table('words')->where('id', $id)->first() : null;
+        if ($id) abort_unless($word, 404);
         if ($word) {
-            $word->detail = DB::table('word_details')->where('word_id', $word->id)->first();
+            $word->detail = DB::table('word_details')->where('word_id', $id)->first();
             if ($word->detail?->type === 'richtext') $word->detail->html = $sanitizer->clean($word->detail->html ?? '');
         }
 
-        return view('admin.content', compact('tab', 'articles', 'words', 'article', 'word'));
+        return view('admin.words.form', compact('word'));
     }
 
     public function passwordForm(): View
@@ -82,7 +153,7 @@ class ContentController extends Controller
             $id = DB::table('reading_items')->insertGetId($row);
         }
 
-        return redirect()->route('admin.content', ['tab' => 'articles', 'id' => $id])->with('success', '文章已保存为草稿');
+        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已保存');
     }
 
     public function saveAnalysis(Request $request, int $id, HtmlContentSanitizer $sanitizer): RedirectResponse
@@ -108,7 +179,7 @@ class ContentController extends Controller
             'status' => $article->status === 'published' ? 'published' : 'draft', 'updated_at' => $now,
         ] + ($exists ? [] : ['created_at' => $now]));
 
-        return redirect()->route('admin.content', ['tab' => 'articles', 'id' => $id])->with('success', '文章解析已保存');
+        return redirect()->route('admin.articles.edit', $id)->with('success', '文章解析已保存');
     }
 
     public function saveReadingWords(Request $request, int $id): RedirectResponse
@@ -128,7 +199,7 @@ class ContentController extends Controller
             if ($rows !== []) DB::table('reading_words')->insert($rows);
         });
 
-        return redirect()->route('admin.content', ['tab' => 'articles', 'id' => $id])->with('success', '重点词汇顺序已保存');
+        return redirect()->route('admin.articles.edit', $id)->with('success', '重点词汇顺序已保存');
     }
 
     public function publishArticle(int $id): RedirectResponse
@@ -142,7 +213,7 @@ class ContentController extends Controller
             DB::table('reading_items')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
             DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'published', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.content', ['tab' => 'articles', 'id' => $id])->with('success', '文章已发布');
+        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已发布');
     }
 
     public function unpublishArticle(int $id): RedirectResponse
@@ -152,7 +223,7 @@ class ContentController extends Controller
             DB::table('reading_items')->where('id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
             DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.content', ['tab' => 'articles', 'id' => $id])->with('success', '文章已下架');
+        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已下架');
     }
 
     public function saveWord(Request $request, HtmlContentSanitizer $sanitizer, ?int $id = null): RedirectResponse
@@ -197,7 +268,7 @@ class ContentController extends Controller
             'updated_at' => $now,
         ] + ($hasDetail ? [] : ['created_at' => $now]));
 
-        return redirect()->route('admin.content', ['tab' => 'words', 'id' => $id])->with('success', '单词及详解已保存');
+        return redirect()->route('admin.words.edit', $id)->with('success', '单词及详解已保存');
     }
 
     public function publishWord(int $id): RedirectResponse
@@ -211,7 +282,7 @@ class ContentController extends Controller
             DB::table('words')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
             DB::table('word_details')->where('word_id', $id)->update(['status' => 'published', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.content', ['tab' => 'words', 'id' => $id])->with('success', '单词已发布');
+        return redirect()->route('admin.words.edit', $id)->with('success', '单词已发布');
     }
 
     public function unpublishWord(int $id): RedirectResponse
@@ -221,7 +292,7 @@ class ContentController extends Controller
             DB::table('words')->where('id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
             DB::table('word_details')->where('word_id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.content', ['tab' => 'words', 'id' => $id])->with('success', '单词已下架');
+        return redirect()->route('admin.words.edit', $id)->with('success', '单词已下架');
     }
 
     public function changePassword(Request $request): RedirectResponse
