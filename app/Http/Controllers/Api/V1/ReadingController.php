@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -205,6 +206,8 @@ class ReadingController extends Controller
             'level' => $item->level,
             'minutes' => $item->minutes,
             'coverAsset' => $item->cover_asset,
+            'coverUrl' => ReadingCover::url($item->cover_asset),
+            'detailImageUrl' => ReadingCover::url($item->detail_image_asset),
         ];
     }
 

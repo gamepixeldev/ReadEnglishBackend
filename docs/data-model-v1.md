@@ -15,7 +15,7 @@
 | 表 | 核心字段 | 关系与约束 |
 | --- | --- | --- |
 | `series` | `id`, `title`, `translation`, `author`, `level`, `description`, `cover_asset`, `status`, `sort_order`, `rights_type`, `rights_note` | 小说/外刊目录。 |
-| `reading_items` | `id`, `slug?`, `kind` (`article`/`chapter`), `series_id?`, `chapter_no?`, `title`, `translation`, `level`, `minutes`, `cover_asset`, `body_json`, `status`, `sort_order`, `rights_type`, `rights_note` | `chapter` 必须有 `series_id`、`chapter_no`；`article` 不需要。`body_json` 按段保存英文句子及对应中文段译。`(series_id, chapter_no)` 唯一。 |
+| `reading_items` | `id`, `slug?`, `kind` (`article`/`chapter`), `series_id?`, `chapter_no?`, `title`, `translation`, `level`, `minutes`, `cover_asset`, `detail_image_asset`, `body_json`, `status`, `sort_order`, `rights_type`, `rights_note` | `chapter` 必须有 `series_id`、`chapter_no`；`article` 不需要。`cover_asset` 是方形封面路径，`detail_image_asset` 是详情页横图路径；旧文章的 `cover_asset` 也可能是本地图标代号。`body_json` 按段保存英文句子及对应中文段译。`(series_id, chapter_no)` 唯一。 |
 | `reading_analyses` | `id`, `reading_item_id`, `type`, `html?`, `url?`, `title?`, `summary?`, `status` | 文章/章节专属解析；`reading_item_id` 唯一。文章可先创建，之后再添加解析；只有已发布解析对外可见。 |
 | `words` | `id`, `slug?`, `headword`, `ipa`, `part_of_speech`, `meaning`, `frequency_label`, `status` | 后台单词库；同拼写不同词义允许不同 ID，不能只用 `headword` 做外键。用户侧不提供浏览整个库的入口。 |
 | `word_details` | `id`, `word_id`, `type`, `html?`, `url?`, `title?`, `summary?`, `status` | 单词专属详解；`word_id` 唯一，不与文章或语法课程共享。 |

@@ -15,6 +15,7 @@
 2. 在独立的本地 MySQL 8.0 库执行迁移、导入可发布的内容并做接口测试。自动化测试仍可使用 SQLite 内存库，但不能替代 MySQL 集成测试。
 3. 测试账号、模拟学习记录、未获授权或未发布的内容不得进入正式导出数据。
 4. 内容资源若存在图片、音频或上传文件，单独整理并迁移；SQL 导出文件不包含这些文件。
+5. 文章图片保存在 `storage/app/public/article-covers`（方形封面）和 `storage/app/public/article-detail-images`（详情横图），首次启动及部署后运行 `php artisan storage:link`；迁移数据库时也要迁移这些文件，并将生产 `APP_URL` 设为可访问的 HTTPS 后端地址。
 
 ## 第一次上线（线上库为空时）
 

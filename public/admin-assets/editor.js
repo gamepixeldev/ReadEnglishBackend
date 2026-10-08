@@ -56,3 +56,21 @@ wordFilter?.addEventListener('input', () => {
         row.hidden = !row.dataset.search.includes(needle);
     });
 });
+
+for (const [inputId, previewId, emptyId] of [
+    ['coverImage', 'cover-preview-image', 'cover-preview-empty'],
+    ['detailImage', 'detail-preview-image', 'detail-preview-empty'],
+]) {
+    const input = document.getElementById(inputId);
+    let temporaryUrl;
+    input?.addEventListener('change', () => {
+        if (temporaryUrl) URL.revokeObjectURL(temporaryUrl);
+        const file = input.files?.[0];
+        if (!file) return;
+        temporaryUrl = URL.createObjectURL(file);
+        const preview = document.getElementById(previewId);
+        preview.src = temporaryUrl;
+        preview.hidden = false;
+        document.getElementById(emptyId).hidden = true;
+    });
+}

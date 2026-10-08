@@ -18,14 +18,17 @@
 @endphp
 <div class="split-panel"><div class="form-stack">
     <section class="card"><div class="card-header"><div><h2>基本信息与正文</h2><p>文章标题、内容和版权来源</p></div></div><div class="card-body">
-        <form method="post" action="{{ $editing ? route('admin.article.update', $article->id) : route('admin.article.create') }}" id="article-form">@csrf @if($editing) @method('PUT') @endif
+        <form method="post" enctype="multipart/form-data" action="{{ $editing ? route('admin.article.update', $article->id) : route('admin.article.create') }}" id="article-form">@csrf @if($editing) @method('PUT') @endif
             <div class="form-grid">
                 <div class="form-field"><label for="title">英文标题 *</label><input class="input" id="title" name="title" value="{{ old('paragraphs') !== null ? old('title', $article->title ?? '') : ($article->title ?? '') }}" required></div>
                 <div class="form-field"><label for="translation">中文标题</label><input class="input" id="translation" name="translation" value="{{ old('translation', $article->translation ?? '') }}"></div>
                 <div class="form-field"><label for="level">阅读级别</label><input class="input" id="level" name="level" value="{{ old('level', $article->level ?? '') }}" placeholder="如：初级"></div>
                 <div class="form-field"><label for="minutes">预计阅读分钟数</label><input class="input" id="minutes" name="minutes" type="number" min="1" value="{{ old('minutes', $article->minutes ?? '') }}"></div>
-                <div class="form-field"><label for="coverAsset">封面资源路径</label><input class="input" id="coverAsset" name="coverAsset" value="{{ old('coverAsset', $article->cover_asset ?? '') }}"></div>
                 <div class="form-field"><label for="slug">内容标识 slug</label><input class="input" id="slug" name="slug" value="{{ old('slug', $article->slug ?? '') }}"></div>
+            </div>
+            <div class="article-images">
+                <div class="form-field"><label for="coverImage">方形封面图</label><div class="cover-upload"><div class="cover-preview square" aria-label="封面预览"><img id="cover-preview-image" src="{{ $coverUrl ?? '' }}" alt="封面预览" @if(!$coverUrl) hidden @endif><span id="cover-preview-empty" @if($coverUrl) hidden @endif>暂无封面</span></div><div class="cover-upload-controls"><input id="coverImage" name="coverImage" type="file" accept="image/jpeg,image/png,image/webp"><p class="form-hint">用于首页和文章列表，建议 1:1 方图。JPG、PNG、WebP，最大 4 MB。</p></div></div></div>
+                <div class="form-field"><label for="detailImage">详情横图</label><div class="cover-upload"><div class="cover-preview landscape" aria-label="详情图片预览"><img id="detail-preview-image" src="{{ $detailImageUrl ?? '' }}" alt="详情图片预览" @if(!$detailImageUrl) hidden @endif><span id="detail-preview-empty" @if($detailImageUrl) hidden @endif>暂无详情图</span></div><div class="cover-upload-controls"><input id="detailImage" name="detailImage" type="file" accept="image/jpeg,image/png,image/webp"><p class="form-hint">用于文章详情页，建议 16:9 横图。JPG、PNG、WebP，最大 4 MB。</p></div></div></div>
             </div>
             <div class="card-header" style="padding:22px 0 14px;margin-top:14px"><div><h2>文章正文</h2><p>每段英文按句换行，可填写整段中文翻译。</p></div><button class="btn secondary small" type="button" id="add-paragraph">＋ 添加段落</button></div>
             <div id="paragraphs">@foreach($paragraphRows as $index => $paragraph)
@@ -63,4 +66,5 @@
     @if($editing)<section class="card"><div class="card-header"><h2>文章信息</h2></div><div class="card-body"><div class="helper">ID：#{{ $article->id }}</div><div class="helper" style="margin-top:8px">最后更新：{{ $article->updated_at }}</div></div></section>@endif
 </aside></div>
 @endsection
+@push('head')<link rel="stylesheet" href="{{ asset('admin-assets/article-images.css') }}">@endpush
 @push('scripts')<script src="{{ asset('admin-assets/editor.js') }}" defer></script>@endpush

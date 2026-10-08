@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\HtmlContentSanitizer;
+use App\Support\ReadingCover;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -73,6 +74,8 @@ class ContentController extends Controller
 
         return view('admin.articles.form', [
             'article' => $article,
+            'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
+            'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
             'words' => DB::table('words')->orderBy('headword')->get(),
         ]);
     }
@@ -120,7 +123,8 @@ class ContentController extends Controller
             'slug' => ['nullable', 'string', 'max:100', Rule::unique('reading_items', 'slug')->ignore($id)],
             'title' => 'required|string|max:255', 'translation' => 'nullable|string|max:255',
             'level' => 'nullable|string|max:32', 'minutes' => 'nullable|integer|min:1|max:65535',
-            'coverAsset' => 'nullable|string|max:255',
+            'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
+            'detailImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'paragraphs' => 'required|array|min:1',
             'paragraphs.*.sentences' => 'required|string|max:20000',
             'paragraphs.*.translation' => 'required|string|max:5000',
@@ -133,18 +137,30 @@ class ContentController extends Controller
             $body[] = ['sentences' => $sentences, 'translation' => trim($paragraph['translation'])];
         }
 
+        $existing = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first() : null;
+        if ($id) abort_unless($existing, 404);
+        $coverAsset = $existing->cover_asset ?? null;
+        if ($request->hasFile('coverImage')) {
+            $coverAsset = $request->file('coverImage')->store('article-covers', 'public');
+            if (! $coverAsset) abort(500, '封面保存失败');
+        }
+        $detailImageAsset = $existing->detail_image_asset ?? null;
+        if ($request->hasFile('detailImage')) {
+            $detailImageAsset = $request->file('detailImage')->store('article-detail-images', 'public');
+            if (! $detailImageAsset) abort(500, '详情图片保存失败');
+        }
+
         $row = [
             'slug' => $data['slug'] ?? null, 'kind' => 'article', 'title' => $data['title'],
             'translation' => $data['translation'] ?? null, 'level' => $data['level'] ?? null,
-            'minutes' => $data['minutes'] ?? null, 'cover_asset' => $data['coverAsset'] ?? null,
+            'minutes' => $data['minutes'] ?? null, 'cover_asset' => $coverAsset,
+            'detail_image_asset' => $detailImageAsset,
             'body_json' => json_encode($body, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
             'rights_type' => $data['rightsType'] ?? null, 'rights_note' => $data['rightsNote'] ?? null,
             'updated_at' => now(),
         ];
 
         if ($id) {
-            $exists = DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists();
-            abort_unless($exists, 404);
             DB::table('reading_items')->where('id', $id)->update($row);
         } else {
             $row['status'] = 'draft';
