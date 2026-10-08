@@ -105,9 +105,28 @@
 | `GET /me/recent?category=reading\|grammar\|word\|puzzle&cursor=...` | 分模块记录列表 | 按最近时间倒序；返回目标稳定 ID、标题快照、状态/进度和 `nextCursor`。阅读含普通文章与小说章节。 |
 | `DELETE /me/recent` | 清空展示记录 | 只清空最近学习列表，不重置阅读完成、单词完成、收藏或拼句进度。 |
 
-## 管理端（第二阶段实现）
+## 内容管理接口（第一阶段）
 
-后台需要草稿、预览、发布和下架能力。管理接口与公开接口分离，按资源提供列表/创建/更新/发布：`series`、`reading-items`、`words`、`grammar-lessons`、`puzzle-sets`、`daily-word-plans`；阅读题、重点词关联、拼句句子在所属资源的编辑界面维护。发布时校验内容完整性、关联 ID、顺序、每日计划词数及版权字段。后台必须鉴权并限制为管理员。
+以下接口使用 `Authorization: Bearer <CONTENT_ADMIN_TOKEN>`。令牌通过服务端 `.env` 配置，绝不能放进 uni-app 前端包。未配置时接口返回 `503 ADMIN_NOT_CONFIGURED`；缺少或错误令牌返回 `401`。
+
+| 方法与路径 | 用途 | 关键返回/说明 |
+| --- | --- | --- |
+| `GET /admin/reading-items?kind=article&status=draft` | 管理文章列表 | 可按类型、状态筛选。 |
+| `POST /admin/reading-items` | 新建文章 | 只创建草稿；`body` 为段落数组，包含 `sentences` 与 `translation`。 |
+| `GET /admin/reading-items/{id}` | 查看编辑内容 | 返回草稿状态、正文、解析和重点词排序。 |
+| `PUT /admin/reading-items/{id}` | 编辑文章 | 只更新提交的字段。 |
+| `PUT /admin/reading-items/{id}/analysis` | 新建或更新本文解析 | 支持 `richtext` / `officialAccount`；富文本会在保存时做标签白名单清理。 |
+| `PUT /admin/reading-items/{id}/words` | 设置文章重点词及顺序 | `{ "wordIds": [12, 8, 21] }`；该接口会整体替换此文章的重点词关联顺序。 |
+| `POST /admin/reading-items/{id}/publish` | 发布文章 | 要求正文和版权来源说明完整；同时发布已绑定的解析。 |
+| `POST /admin/reading-items/{id}/unpublish` | 下架文章 | 改回草稿状态，公开接口不再返回。 |
+| `GET /admin/words?status=draft&q=...` | 管理单词列表 | 支持状态和拼写搜索。 |
+| `POST /admin/words` | 新建单词 | 只创建草稿。 |
+| `GET /admin/words/{id}` | 查看单词及详解 | 用于载入已有内容进行编辑。 |
+| `PUT /admin/words/{id}` | 编辑单词基础资料 | 音标、词性、释义、发音资源等。 |
+| `PUT /admin/words/{id}/detail` | 新建或更新单词详解 | 支持富文本或公众号链接。 |
+| `POST /admin/words/{id}/publish` / `unpublish` | 发布或下架单词 | 发布需先添加详解；单词与详解同时变更状态。 |
+
+这一阶段还没有提供可视化后台页面，接口可供后续管理界面或受控 API 客户端调用。阅读题编辑、系列/章节维护、独立语法课程、拼句和每日计划管理仍待实现。富文本允许的标签有限；如果需要表格、图片或复杂排版，应先扩充并审查清理规则再投入内容。
 
 ## 前端替换顺序与验收
 
