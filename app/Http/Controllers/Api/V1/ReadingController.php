@@ -34,7 +34,7 @@ class ReadingController extends Controller
         ]);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(int $id): JsonResponse
     {
         $item = $this->publishedReading($id);
         if (! $item) {
@@ -45,6 +45,7 @@ class ReadingController extends Controller
             'body' => json_decode($item->body_json, true) ?: [],
             'wordCount' => DB::table('reading_words')->where('reading_item_id', $id)->count(),
             'questionCount' => DB::table('reading_questions')->where('reading_item_id', $id)->count(),
+            'hasGrammarAnalysis' => DB::table('reading_analyses')->where('reading_item_id', $id)->where('status', 'published')->exists(),
         ];
 
         if ($item->kind === 'chapter') {
@@ -64,7 +65,7 @@ class ReadingController extends Controller
         return response()->json($result);
     }
 
-    public function words(string $id): JsonResponse
+    public function words(int $id): JsonResponse
     {
         if (! $this->publishedReading($id)) {
             return $this->notFound();
@@ -88,18 +89,15 @@ class ReadingController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function grammarAnalysis(string $id): JsonResponse
+    public function grammarAnalysis(int $id): JsonResponse
     {
         $item = $this->publishedReading($id);
         if (! $item) {
             return $this->notFound();
         }
 
-        if (! $item->grammar_source_id) {
-            return $this->notFound();
-        }
-
-        $source = DB::table('content_sources')->where('id', $item->grammar_source_id)->first();
+        $source = DB::table('reading_analyses')->where('reading_item_id', $id)
+            ->where('status', 'published')->first();
         if (! $source) {
             return $this->notFound();
         }
@@ -113,7 +111,7 @@ class ReadingController extends Controller
         ]);
     }
 
-    public function questions(string $id): JsonResponse
+    public function questions(int $id): JsonResponse
     {
         if (! $this->publishedReading($id)) {
             return $this->notFound();
@@ -134,7 +132,7 @@ class ReadingController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function checkQuestion(Request $request, string $id): JsonResponse
+    public function checkQuestion(Request $request, int $id): JsonResponse
     {
         $question = DB::table('reading_questions as q')
             ->join('reading_items as r', 'r.id', '=', 'q.reading_item_id')
@@ -182,7 +180,7 @@ class ReadingController extends Controller
         ]);
     }
 
-    public function seriesShow(string $id): JsonResponse
+    public function seriesShow(int $id): JsonResponse
     {
         $series = DB::table('series')->where('id', $id)->where('status', 'published')->first();
         if (! $series) {
@@ -223,7 +221,7 @@ class ReadingController extends Controller
         ];
     }
 
-    private function publishedReading(string $id): ?object
+    private function publishedReading(int $id): ?object
     {
         return DB::table('reading_items')->where('id', $id)->where('status', 'published')->first();
     }

@@ -34,7 +34,32 @@ class GrammarController extends Controller
         ]);
     }
 
-    public function questions(string $id): JsonResponse
+    public function show(int $id): JsonResponse
+    {
+        $lesson = DB::table('grammar_lessons')->where('id', $id)->where('status', 'published')->first();
+        if (! $lesson) {
+            return $this->notFound();
+        }
+
+        $content = DB::table('grammar_lesson_contents')->where('grammar_lesson_id', $id)
+            ->where('status', 'published')->first();
+
+        return response()->json([
+            'id' => $lesson->id,
+            'title' => $lesson->title,
+            'summary' => $lesson->summary,
+            'level' => $lesson->level,
+            'contentSource' => $content ? [
+                'type' => $content->type,
+                'html' => $content->type === 'richtext' ? $content->html : null,
+                'url' => $content->type === 'officialAccount' ? $content->url : null,
+                'title' => $content->title,
+                'summary' => $content->summary,
+            ] : null,
+        ]);
+    }
+
+    public function questions(int $id): JsonResponse
     {
         $lesson = DB::table('grammar_lessons')->where('id', $id)->where('status', 'published')->first();
         if (! $lesson) {
@@ -54,7 +79,7 @@ class GrammarController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function checkQuestion(Request $request, string $id): JsonResponse
+    public function checkQuestion(Request $request, int $id): JsonResponse
     {
         $question = DB::table('grammar_questions as q')
             ->join('grammar_lessons as g', 'g.id', '=', 'q.grammar_lesson_id')

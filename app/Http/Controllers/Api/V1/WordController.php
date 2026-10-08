@@ -8,16 +8,14 @@ use Illuminate\Support\Facades\DB;
 
 class WordController extends Controller
 {
-    public function show(string $id): JsonResponse
+    public function show(int $id): JsonResponse
     {
         $word = DB::table('words')->where('id', $id)->where('status', 'published')->first();
         if (! $word) {
             return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '单词不存在']], 404);
         }
 
-        $source = $word->content_source_id
-            ? DB::table('content_sources')->where('id', $word->content_source_id)->first()
-            : null;
+        $source = DB::table('word_details')->where('word_id', $id)->where('status', 'published')->first();
 
         return response()->json([
             'id' => $word->id,
@@ -27,7 +25,6 @@ class WordController extends Controller
             'meaning' => $word->meaning,
             'frequencyLabel' => $word->frequency_label,
             'audioAsset' => $word->audio_asset,
-            'contentSourceId' => $word->content_source_id,
             'contentSource' => $source ? [
                 'type' => $source->type,
                 'html' => $source->type === 'richtext' ? $source->html : null,

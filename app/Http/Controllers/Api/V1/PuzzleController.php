@@ -31,7 +31,7 @@ class PuzzleController extends Controller
         ]);
     }
 
-    public function show(string $id): JsonResponse
+    public function show(int $id): JsonResponse
     {
         $set = DB::table('puzzle_sets')->where('id', $id)->where('status', 'published')->first();
         if (! $set) {
