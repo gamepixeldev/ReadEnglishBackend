@@ -46,7 +46,7 @@
 
 | 表 | 核心字段 | 规则 |
 | --- | --- | --- |
-| `users` / `user_identities` | `users.id`; `user_identities.user_id`, `provider`, `provider_subject` | 同一内部用户可逐步关联微信小程序、未来 iOS 等身份；`(provider, provider_subject)` 唯一。微信小程序的 `openid` 存在 `provider_subject` 中（`provider` 标记为微信小程序），不在 `users` 表重复存储。客户端不能自己指定 `user_id`。 |
+| `users` / `user_identities` | `users.id`, `name?`, `avatar_url?`; `user_identities.user_id`, `provider`, `provider_app_id`, `provider_subject` | 同一内部用户可关联微信小程序、未来 iOS 等身份。微信登录时 `provider=wechat_miniapp`、`provider_app_id=微信 AppID`、`provider_subject=openid`；三列组合唯一。不同小程序的 OpenID 分开识别，客户端不能自己指定 `user_id`。 |
 | `reading_completions` | `user_id`, `reading_item_id`, `completed_at` | 仅点“阅读完成”才写入；`(user_id, reading_item_id)` 唯一。再次进入显示“已完成阅读”。 |
 | `word_learning_events` | `id`, `user_id`, `word_id`, `source_kind` (`daily`/`reading`), `reading_item_id?`, `plan_date?`, `completed_at`, `request_id` | 从单词详情完成拼写时写入；精读重点词汇与每日单词共用此表。`(user_id, request_id)` 防重试重复写入；再次主动学习允许新事件。 |
 | `daily_word_completions` | `user_id`, `plan_id`, `word_id`, `completed_at` | 只有每日单词路径完成详情→拼写才更新；在精读中先学过同词，不自动抵消当天任务。三列联合唯一。 |
@@ -54,7 +54,7 @@
 | `puzzle_progress` | `user_id`, `puzzle_set_id`, `cursor_next`, `completed_at?`, `updated_at` | `cursor_next` 为下一句的零基序号：完成前两句后显示 `2/3`，再次进入第三句；从头开始重置为 0。两列联合唯一。 |
 | `recent_activity` | `user_id`, `category` (`reading`/`grammar`/`word`/`puzzle`), `target_id`, `last_active_at` | 每个目标保留最近一次时间，用游标分页展示。阅读完成、单词学完、进入独立语法、开始/推进拼句时更新。清空最近学习只删此表，不删除完成状态和拼句进度。 |
 
-微信登录用户不要求邮箱或密码，因此 `users.email` 和 `users.password` 允许为空；后台管理员仍使用邮箱和密码登录。微信资料中的昵称/头像可选，不作为身份凭据。
+微信登录用户不要求邮箱或密码，因此 `users.email` 和 `users.password` 允许为空；后台管理员仍使用邮箱和密码登录。`users.name` 和 `users.avatar_url` 可空，等用户主动设置后再保存；资料不作为身份凭据。`provider_app_id` 在新增身份时必须填写，后端用自己配置的 AppID，不接受客户端自行指定。
 
 当前静态版的阅读理解、独立语法练习不单独保存答题成绩；v1 不新增成绩表。每日单词的“直接拼写”只是练习，不写 `word_learning_events`、`daily_word_completions` 或最近学习。若以后需要错题本/成绩统计，再单独设计 `question_attempts`。
 
