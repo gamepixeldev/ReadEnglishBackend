@@ -15,6 +15,10 @@ class WordController extends Controller
             return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '单词不存在']], 404);
         }
 
+        $source = $word->content_source_id
+            ? DB::table('content_sources')->where('id', $word->content_source_id)->first()
+            : null;
+
         return response()->json([
             'id' => $word->id,
             'headword' => $word->headword,
@@ -24,6 +28,13 @@ class WordController extends Controller
             'frequencyLabel' => $word->frequency_label,
             'audioAsset' => $word->audio_asset,
             'contentSourceId' => $word->content_source_id,
+            'contentSource' => $source ? [
+                'type' => $source->type,
+                'html' => $source->type === 'richtext' ? $source->html : null,
+                'url' => $source->type === 'officialAccount' ? $source->url : null,
+                'title' => $source->title,
+                'summary' => $source->summary,
+            ] : null,
         ]);
     }
 }

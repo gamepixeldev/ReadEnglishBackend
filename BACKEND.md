@@ -6,6 +6,7 @@ Laravel 13 + PHP 8.4。本地开发使用独立的 MySQL 8.0 数据库，首次�
 
 - 已建立内容与学习记录表的迁移，并已在本地项目专用 MySQL 8.0 数据库运行。
 - 已实现文章/章节、系列、重点词汇、阅读题、单词、语法题及拼句集合的部分公开接口。
+- 本文语法解析接口已接通；可用 `php artisan db:seed --class=SampleReadingSeeder` 幂等录入一篇原创测试文章、8 个重点词汇与 4 道阅读题。此命令只用于开发测试，不要在正式内容库运行。
 - 阅读题和语法题在获取题目时不返回答案，提交后才返回判定。
 - 用户登录、学习记录写入、富文本发布/清理、内容管理后台和前端 API 对接尚未实现。不要把当前工程当作可上线版本。
 
@@ -23,6 +24,8 @@ Laravel 13 + PHP 8.4。本地开发使用独立的 MySQL 8.0 数据库，首次�
 3. 执行 `php artisan key:generate`、`php artisan migrate`。
 4. 执行 `php artisan serve`，通过 `/api/v1/reading-items` 等路径访问。新数据库尚未导入内容时，列表为空。
 5. 执行 `php artisan test` 运行 SQLite 内存库测试；本机 MySQL 8.0 迁移已验证，后续仍需完整的 MySQL 集成测试。
+
+小程序 H5 开发环境默认请求 `http://127.0.0.1:8000/api/v1`；需要改地址时设置 `VITE_API_BASE_URL`。真机和上线环境不能使用 `127.0.0.1`，需配置可访问的 HTTPS API 域名。
 
 当前开发机在忽略的 `.local-tools/` 中保存了临时 PHP 扩展配置。它不属于部署配置，也不会提交到 Git。
 

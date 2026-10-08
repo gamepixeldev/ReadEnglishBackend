@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Database\Seeders\SampleReadingSeeder;
 use Tests\TestCase;
 
 class StudyContentApiTest extends TestCase
@@ -27,6 +28,34 @@ class StudyContentApiTest extends TestCase
         $this->getJson('/api/v1/reading-items/draft')->assertNotFound();
         $this->getJson('/api/v1/reading-items?limit=100')->assertUnprocessable()
             ->assertJsonPath('error.code', 'VALIDATION_ERROR');
+    }
+
+    public function test_sample_reading_has_real_body_grammar_words_and_questions(): void
+    {
+        $this->seed(SampleReadingSeeder::class);
+        $this->seed(SampleReadingSeeder::class);
+
+        $this->getJson('/api/v1/reading-items?kind=article')->assertOk()
+            ->assertJsonCount(1, 'items')->assertJsonPath('items.0.id', 'sample-blue-umbrella');
+        $this->getJson('/api/v1/reading-items/sample-blue-umbrella')->assertOk()
+            ->assertJsonPath('body.0.sentences.0', 'On a rainy afternoon, Lily found a blue umbrella beside the bus stop.')
+            ->assertJsonPath('wordCount', 8)->assertJsonPath('questionCount', 4);
+        $this->getJson('/api/v1/reading-items/sample-blue-umbrella/grammar-analysis')->assertOk()
+            ->assertJsonPath('type', 'richtext')->assertSee('even though');
+        $this->getJson('/api/v1/reading-items/sample-blue-umbrella/words')->assertOk()
+            ->assertJsonCount(8, 'items')->assertJsonPath('items.0.headword', 'kindness');
+        $this->getJson('/api/v1/words/sample-word-kindness')->assertOk()
+            ->assertJsonPath('contentSource.type', 'richtext');
+        $this->getJson('/api/v1/reading-items/sample-blue-umbrella/questions')->assertOk()
+            ->assertJsonCount(4, 'items')->assertDontSee('correctAnswer')->assertDontSee('explanation');
+        $this->postJson('/api/v1/reading-questions/sample-umbrella-q1/check', ['answer' => 1])
+            ->assertOk()->assertJsonPath('correct', true);
+    }
+
+    public function test_grammar_analysis_is_not_exposed_for_draft_article(): void
+    {
+        $this->reading('draft', 'draft', 1);
+        $this->getJson('/api/v1/reading-items/draft/grammar-analysis')->assertNotFound();
     }
 
     public function test_question_answer_is_hidden_until_check(): void

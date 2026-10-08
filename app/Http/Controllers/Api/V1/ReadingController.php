@@ -88,6 +88,31 @@ class ReadingController extends Controller
         return response()->json(['items' => $items]);
     }
 
+    public function grammarAnalysis(string $id): JsonResponse
+    {
+        $item = $this->publishedReading($id);
+        if (! $item) {
+            return $this->notFound();
+        }
+
+        if (! $item->grammar_source_id) {
+            return $this->notFound();
+        }
+
+        $source = DB::table('content_sources')->where('id', $item->grammar_source_id)->first();
+        if (! $source) {
+            return $this->notFound();
+        }
+
+        return response()->json([
+            'type' => $source->type,
+            'html' => $source->type === 'richtext' ? $source->html : null,
+            'url' => $source->type === 'officialAccount' ? $source->url : null,
+            'title' => $source->title,
+            'summary' => $source->summary,
+        ]);
+    }
+
     public function questions(string $id): JsonResponse
     {
         if (! $this->publishedReading($id)) {
