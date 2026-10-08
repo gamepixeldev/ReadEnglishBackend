@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\HtmlContentSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -160,7 +161,7 @@ class ContentAdminController extends Controller
             'title' => 'nullable|string|max:255',
             'summary' => 'nullable|string|max:10000',
         ]);
-        if ($data['type'] === 'richtext') $data['html'] = $this->sanitizeHtml($data['html'] ?? '');
+        if ($data['type'] === 'richtext') $data['html'] = app(HtmlContentSanitizer::class)->clean($data['html'] ?? '');
         if ($data['type'] === 'richtext' && trim(strip_tags($data['html'])) === '') {
             return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '富文本清理后没有可显示的内容']], 422);
         }
@@ -293,7 +294,7 @@ class ContentAdminController extends Controller
             'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
             'title' => 'nullable|string|max:255', 'summary' => 'nullable|string|max:10000',
         ]);
-        if ($data['type'] === 'richtext') $data['html'] = $this->sanitizeHtml($data['html'] ?? '');
+        if ($data['type'] === 'richtext') $data['html'] = app(HtmlContentSanitizer::class)->clean($data['html'] ?? '');
         if ($data['type'] === 'richtext' && trim(strip_tags($data['html'])) === '') {
             return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '富文本清理后没有可显示的内容']], 422);
         }
@@ -352,50 +353,6 @@ class ContentAdminController extends Controller
                 'status' => $detail->status,
             ] : null,
         ];
-    }
-
-    private function sanitizeHtml(string $html): string
-    {
-        $previous = libxml_use_internal_errors(true);
-        $document = new \DOMDocument('1.0', 'UTF-8');
-        $document->loadHTML('<?xml encoding="UTF-8"><div id="content-root">'.$html.'</div>', LIBXML_HTML_NOIMPLIED | LIBXML_HTML_NODEFDTD);
-        libxml_clear_errors();
-        libxml_use_internal_errors($previous);
-
-        $root = $document->getElementById('content-root');
-        if (! $root) return '';
-        $this->cleanNode($root);
-        $result = '';
-        foreach ($root->childNodes as $child) $result .= $document->saveHTML($child);
-        return $result;
-    }
-
-    private function cleanNode(\DOMNode $node): void
-    {
-        $allowed = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'a', 'span', 'div', 'hr', 'sup', 'sub'];
-        for ($child = $node->firstChild; $child;) {
-            $next = $child->nextSibling;
-            if ($child instanceof \DOMElement) {
-                $tag = strtolower($child->tagName);
-                if (! in_array($tag, $allowed, true)) {
-                    if (in_array($tag, ['script', 'style', 'iframe', 'object', 'svg', 'math'], true)) {
-                        $node->removeChild($child);
-                    } else {
-                        while ($child->firstChild) $node->insertBefore($child->firstChild, $child);
-                        $node->removeChild($child);
-                    }
-                } else {
-                    $href = $tag === 'a' ? $child->getAttribute('href') : '';
-                    while ($child->attributes->length > 0) $child->removeAttributeNode($child->attributes->item(0));
-                    if ($href !== '' && preg_match('/^(https?:|mailto:)/i', $href)) {
-                        $child->setAttribute('href', $href);
-                        $child->setAttribute('rel', 'noopener noreferrer');
-                    }
-                    $this->cleanNode($child);
-                }
-            }
-            $child = $next;
-        }
     }
 
     private function notFound(): JsonResponse
