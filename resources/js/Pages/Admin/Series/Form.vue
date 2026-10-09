@@ -2,9 +2,9 @@
 import { computed, ref } from 'vue';
 import { Link, useForm, router } from '@inertiajs/vue3';
 import AdminLayout from '../../../Layouts/AdminLayout.vue';
-const props=defineProps({series:Object,coverUrl:String,readingLevels:{type:Array,default:()=>[]}});
+const props=defineProps({series:Object,coverUrl:String,nextSortOrder:{type:Number,default:1},readingLevels:{type:Array,default:()=>[]}});
 const editing=computed(()=>!!props.series);
-const form=useForm({title:props.series?.title||'',translation:props.series?.translation||'',author:props.series?.author||'',level:props.series?.level||'',description:props.series?.description||'',rightsType:props.series?.rights_type||'',rightsNote:props.series?.rights_note||'',coverImage:null});
+const form=useForm({title:props.series?.title||'',translation:props.series?.translation||'',author:props.series?.author||'',level:props.series?.level||'',sortOrder:props.series?.sort_order??props.nextSortOrder,description:props.series?.description||'',rightsType:props.series?.rights_type||'',rightsNote:props.series?.rights_note||'',coverImage:null});
 const coverPreview=ref(props.coverUrl||'');
 function onCoverChange(file){if(!file.raw)return;coverPreview.value=URL.createObjectURL(file.raw);form.coverImage=file.raw}
 function save(){form.transform(data=>({...data})).submit(editing.value?'put':'post',editing.value?`/admin/series/${props.series.id}`:'/admin/series',{forceFormData:true})}

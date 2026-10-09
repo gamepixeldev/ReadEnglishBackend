@@ -52,7 +52,7 @@ class ContentAdminController extends Controller
             'body.*.translation' => 'required|string|max:5000',
             'body.*.sentenceTranslations' => 'sometimes|array',
             'body.*.sentenceTranslations.*' => 'nullable|string|max:5000',
-            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsType' => ['required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
             'sortOrder' => 'sometimes|integer|min:0|max:4294967295',
         ]);
@@ -95,7 +95,7 @@ class ContentAdminController extends Controller
             'body.*.translation' => 'required_with:body|string|max:5000',
             'body.*.sentenceTranslations' => 'sometimes|array',
             'body.*.sentenceTranslations.*' => 'nullable|string|max:5000',
-            'rightsType' => ['sometimes', 'nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsType' => ['sometimes', 'required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'sometimes|nullable|string|max:10000',
             'sortOrder' => 'sometimes|integer|min:0|max:4294967295',
         ]);
@@ -216,7 +216,7 @@ class ContentAdminController extends Controller
     {
         $reading = DB::table('reading_items')->where('id', $id)->first();
         if (! $reading) return $this->notFound();
-        if (! $reading->rights_type || ! $reading->rights_note || ! $reading->body_json) {
+        if (! $reading->rights_type || ! $reading->body_json) {
             return response()->json(['error' => ['code' => 'CONTENT_INCOMPLETE', 'message' => '发布前请补齐正文和版权来源说明']], 422);
         }
 

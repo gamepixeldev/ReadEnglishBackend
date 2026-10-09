@@ -56,7 +56,7 @@ class ContentController extends Controller
         }
         if ($status) $query->where('status', $status);
 
-        $articles = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString();
+        $articles = $query->orderBy('sort_order')->orderBy('id')->paginate(15)->withQueryString();
         $articles->getCollection()->transform(function (object $article): object {
             $article->publishChecks = $this->articlePublishChecks($article);
             return $article;
@@ -85,7 +85,7 @@ class ContentController extends Controller
         if ($status) $query->where('status', $status);
 
         return Inertia::render('Admin/Series/Index', [
-            'seriesItems' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'seriesItems' => $query->orderBy('sort_order')->orderBy('id')->paginate(15)->withQueryString(),
             'search' => $search,
             'status' => $status,
         ]);
@@ -104,6 +104,7 @@ class ContentController extends Controller
             'series' => $series,
             'coverUrl' => ReadingCover::url($series->cover_asset ?? null),
             'readingLevels' => $this->readingLevelOptions(),
+            'nextSortOrder' => (int) DB::table('series')->max('sort_order') + 1,
         ]);
     }
 
@@ -116,6 +117,7 @@ class ContentController extends Controller
             'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'rightsType' => ['required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
+            'sortOrder' => 'sometimes|integer|min:0|max:4294967295',
         ]);
         $existing = $id ? DB::table('series')->where('id', $id)->first() : null;
         if ($id) abort_unless($existing, 404);
@@ -129,13 +131,14 @@ class ContentController extends Controller
             'author' => $data['author'] ?? null, 'level' => $data['level'] ?? null,
             'description' => $data['description'] ?? null, 'cover_asset' => $coverAsset,
             'rights_type' => $data['rightsType'] ?? null, 'rights_note' => $data['rightsNote'] ?? null,
+            'sort_order' => (int) ($data['sortOrder'] ?? ($existing->sort_order ?? ((int) DB::table('series')->max('sort_order') + 1))),
             'updated_at' => now(),
         ];
         if ($id) {
             DB::table('series')->where('id', $id)->update($row);
         } else {
             $row['status'] = 'draft';
-            $row['sort_order'] = (int) DB::table('series')->max('sort_order') + 1;
+            $row['sort_order'] = (int) ($data['sortOrder'] ?? ((int) DB::table('series')->max('sort_order') + 1));
             $row['created_at'] = now();
             $id = DB::table('series')->insertGetId($row);
         }
@@ -234,6 +237,7 @@ class ContentController extends Controller
             'readingLevels' => $this->readingLevelOptions(),
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
+            'nextSortOrder' => (int) DB::table('reading_items')->where('kind', 'article')->max('sort_order') + 1,
             'selectedWords' => $article
                 ? DB::table('words')->whereIn('id', $article->wordIds)->get()
                     ->sortBy(fn ($word) => array_search((int) $word->id, $article->wordIds, true))->values()
@@ -341,6 +345,7 @@ class ContentController extends Controller
                 ? ['required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])]
                 : ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
+            'sortOrder' => $kind === 'article' ? 'sometimes|integer|min:0|max:4294967295' : 'prohibited',
         ]);
         $body = [];
         foreach ($data['paragraphs'] as $paragraph) {
@@ -379,12 +384,15 @@ class ContentController extends Controller
             'updated_at' => now(),
         ];
         if ($kind === 'chapter') $row['sort_order'] = (int) $data['chapterNo'];
+        else $row['sort_order'] = array_key_exists('sortOrder', $data)
+            ? (int) $data['sortOrder']
+            : (int) ($existing->sort_order ?? ((int) DB::table('reading_items')->where('kind', 'article')->max('sort_order') + 1));
 
         if ($id) {
             DB::table('reading_items')->where('id', $id)->update($row);
         } else {
             $row['status'] = 'draft';
-            $row['sort_order'] = $kind === 'chapter' ? (int) $data['chapterNo'] : 0;
+            $row['sort_order'] = $kind === 'chapter' ? (int) $data['chapterNo'] : (int) ($data['sortOrder'] ?? 1);
             $row['created_at'] = now();
             $id = DB::table('reading_items')->insertGetId($row);
         }

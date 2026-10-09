@@ -153,6 +153,11 @@ class ReadingController extends Controller
         $question = DB::table('reading_questions as q')
             ->join('reading_items as r', 'r.id', '=', 'q.reading_item_id')
             ->where('q.id', $id)->where('r.status', 'published')
+            ->where(function ($query): void {
+                $query->where('r.kind', '!=', 'chapter')->orWhereExists(function ($series): void {
+                    $series->selectRaw('1')->from('series')->whereColumn('series.id', 'r.series_id')->where('series.status', 'published');
+                });
+            })
             ->select('q.*')->first();
         if (! $question) {
             return $this->notFound();
