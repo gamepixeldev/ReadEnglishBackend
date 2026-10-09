@@ -29,14 +29,14 @@ function closeSidebar() { document.body.classList.remove('sidebar-open'); }
     </aside>
     <div class="admin-content">
       <header class="admin-topbar">
-        <button class="menu-toggle" type="button" aria-label="打开导航" @click="toggleSidebar">☰</button>
+        <el-button class="menu-toggle" text aria-label="打开导航" @click="toggleSidebar">☰</el-button>
         <div class="topbar-location">精读英语 <span>/</span> {{ section }}</div>
-        <div class="topbar-user"><span class="user-avatar">{{ (user.name || 'A').slice(0,1) }}</span><span class="user-name">{{ user.name || user.email }}</span><button type="button" class="logout-link" @click="logout">退出</button></div>
+        <div class="topbar-user"><span class="user-avatar">{{ (user.name || 'A').slice(0,1) }}</span><span class="user-name">{{ user.name || user.email }}</span><el-button link class="logout-link" @click="logout">退出</el-button></div>
       </header>
       <main class="admin-main">
         <div class="page-heading"><div><p class="eyebrow">{{ section }}</p><h1>{{ title }}</h1><p class="page-description">{{ description }}</p></div><div class="heading-actions"><slot name="actions" /></div></div>
-        <div v-if="success" class="alert success">{{ success }}</div>
-        <div v-if="Object.keys($page.props.errors || {}).length" class="alert error"><strong>请检查以下内容</strong><ul><li v-for="(messages,key) in $page.props.errors" :key="key">{{ messages }}</li></ul></div>
+        <el-alert v-if="success" :title="success" type="success" :closable="false" show-icon />
+        <el-alert v-if="Object.keys($page.props.errors || {}).length" title="请检查以下内容" type="error" :closable="false" show-icon><ul><li v-for="(messages,key) in $page.props.errors" :key="key">{{ messages }}</li></ul></el-alert>
         <slot />
       </main>
     </div>
