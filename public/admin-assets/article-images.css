@@ -36,4 +36,9 @@
 .dialog-head p{margin:5px 0 0;color:#8390a2;font-size:12px}
 .dialog-close{border:0;background:none;color:#77849a;font-size:23px;line-height:1}
 .dialog-error{margin:0;padding:10px 12px;border-radius:6px;background:#fff2f1;color:#ad3d40;font-size:13px}
+.reading-question{border:1px solid #e4e9f1;border-radius:10px;background:#fbfcfe;padding:18px;margin:0 0 14px}
+.question-editor-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;color:#344157}
+.question-editor-head strong{font-size:14px}
+.choice-fields[hidden]{display:none}
+.choice-answer[hidden],.fill-answer[hidden]{display:none}
 @media(max-width:600px){.picker-tools{align-items:stretch;flex-direction:column}.picker-tools .btn{align-self:flex-start}.word-dialog{padding:18px}}

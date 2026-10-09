@@ -13,6 +13,7 @@
     $analysisContent = old('html', $analysis->html ?? '');
     $analysisHtml = $analysisFormat === 'html' ? app(\App\Services\HtmlContentSanitizer::class)->clean((string) $analysisContent) : '';
     $analysisMarkdown = $analysisFormat === 'markdown' ? (string) $analysisContent : '';
+    $questionRows = old('questions', $editing ? $article->questions : []);
 @endphp
 <div class="split-panel"><div class="form-stack">
     <section class="card"><div class="card-header"><div><h2>基本信息与正文</h2><p>文章标题、内容和版权来源</p></div></div><div class="card-body">
@@ -58,6 +59,47 @@
         </form>
         <dialog class="word-dialog" id="new-word-dialog"><form id="new-word-form" data-create-url="{{ route('admin.article.word-create', $article->id) }}"><div class="dialog-head"><div><h3>添加单词</h3><p>先保存为草稿，可稍后补充详解并发布。</p></div><button type="button" class="dialog-close" id="close-new-word" aria-label="关闭">×</button></div><div class="form-grid"><div class="form-field"><label for="quick-headword">单词 <span class="required-mark">*</span></label><input class="input" id="quick-headword" name="headword" required></div><div class="form-field"><label for="quick-meaning">释义 <span class="required-mark">*</span></label><input class="input" id="quick-meaning" name="meaning" required></div><div class="form-field"><label for="quick-ipa">音标</label><input class="input" id="quick-ipa" name="ipa"></div><div class="form-field"><label for="quick-pos">词性</label><input class="input" id="quick-pos" name="partOfSpeech"></div></div><p class="dialog-error" id="new-word-error" hidden></p><div class="section-actions"><button class="btn" type="submit">创建并添加到本文</button></div></form></dialog>
     </div></section>
+    <section class="card"><div class="card-header"><div><h2>阅读理解题</h2><p>添加与本文配套的阅读题，顺序即学习端展示顺序。</p></div><button class="btn secondary" type="button" id="add-reading-question">＋ 添加题目</button></div><div class="card-body">
+        <form method="post" action="{{ route('admin.article.questions', $article->id) }}" id="reading-questions-form">@csrf @method('PUT')
+            <div id="reading-question-list">
+                @foreach($questionRows as $index => $question)
+                    @php
+                        $questionValue = is_array($question) ? (object) $question : $question;
+                        $questionOptions = is_array($questionValue->options ?? null) ? $questionValue->options : (is_string($questionValue->options ?? null) ? preg_split('/\\R/u', $questionValue->options) : (json_decode($questionValue->options_json ?? '[]', true) ?: []));
+                        $questionAnswer = $questionValue->answer ?? ($questionValue->answerIndex ?? '');
+                        $questionAnswerIndex = ($questionValue->kind ?? 'choice') === 'choice' ? (is_numeric($questionAnswer) ? (int) $questionAnswer : max(0, ord(strtoupper((string) $questionAnswer)[0] ?? 'A') - ord('A'))) : null;
+                    @endphp
+                    <div class="reading-question" data-question>
+                        <div class="question-editor-head"><strong>题目 <span data-question-number>{{ $loop->iteration }}</span></strong><button class="ghost" type="button" data-remove-question>移除</button></div>
+                        <input type="hidden" name="questions[{{ $index }}][id]" value="{{ $questionValue->id ?? '' }}">
+                        <div class="form-grid">
+                            <div class="form-field"><label>题型</label><select class="select" name="questions[{{ $index }}][questionType]">@foreach(['细节理解','主旨大意','推理判断','词义猜测','标题归纳','其他'] as $type)<option value="{{ $type }}" @selected(($questionValue->question_type ?? $questionValue->questionType ?? '细节理解') === $type)>{{ $type }}</option>@endforeach</select></div>
+                            <div class="form-field"><label>作答方式</label><select class="select" name="questions[{{ $index }}][kind]" data-question-kind><option value="choice" @selected(($questionValue->kind ?? 'choice') === 'choice')>选择题</option><option value="fill" @selected(($questionValue->kind ?? '') === 'fill')>填空题</option></select></div>
+                            <div class="form-field wide"><label>英文题目 <span class="required-mark">*</span></label><textarea class="textarea" name="questions[{{ $index }}][prompt]" required>{{ $questionValue->prompt ?? '' }}</textarea></div>
+                            <div class="form-field wide"><label>中文题目</label><textarea class="textarea" name="questions[{{ $index }}][promptCn]">{{ $questionValue->prompt_cn ?? $questionValue->promptCn ?? '' }}</textarea></div>
+                            <div class="form-field wide choice-fields" @if(($questionValue->kind ?? 'choice') !== 'choice') hidden @endif><label>选项（每行一个）</label><textarea class="textarea" name="questions[{{ $index }}][options]" data-question-options>{{ implode("\n", $questionOptions) }}</textarea><p class="form-hint">选择题填写 2–8 个选项。</p></div>
+                            <div class="form-field" data-answer-field><label data-answer-label>正确选项</label><select class="select choice-answer" name="questions[{{ $index }}][answer]" data-choice-answer>@for($optionIndex = 0; $optionIndex < max(2, count($questionOptions)); $optionIndex++)<option value="{{ chr(65 + $optionIndex) }}" @selected($questionAnswerIndex === $optionIndex)>{{ chr(65 + $optionIndex) }}</option>@endfor</select><input class="input fill-answer" name="questions[{{ $index }}][answer]" value="{{ ($questionValue->kind ?? 'choice') === 'fill' ? $questionAnswer : '' }}" @if(($questionValue->kind ?? 'choice') !== 'fill') hidden disabled @endif><p class="form-hint answer-hint">选择正确选项字母。</p></div>
+                            <div class="form-field wide"><label>答案解析</label><textarea class="textarea" name="questions[{{ $index }}][explanation]">{{ $questionValue->explanation ?? '' }}</textarea></div>
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+            <template id="reading-question-template"><div class="reading-question" data-question>
+                <div class="question-editor-head"><strong>题目 <span data-question-number></span></strong><button class="ghost" type="button" data-remove-question>移除</button></div>
+                <input type="hidden" name="questions[__INDEX__][id]" value="">
+                <div class="form-grid">
+                    <div class="form-field"><label>题型</label><select class="select" name="questions[__INDEX__][questionType]"><option>细节理解</option><option>主旨大意</option><option>推理判断</option><option>词义猜测</option><option>标题归纳</option><option>其他</option></select></div>
+                    <div class="form-field"><label>作答方式</label><select class="select" name="questions[__INDEX__][kind]" data-question-kind><option value="choice">选择题</option><option value="fill">填空题</option></select></div>
+                    <div class="form-field wide"><label>英文题目 <span class="required-mark">*</span></label><textarea class="textarea" name="questions[__INDEX__][prompt]" required></textarea></div>
+                    <div class="form-field wide"><label>中文题目</label><textarea class="textarea" name="questions[__INDEX__][promptCn]"></textarea></div>
+                    <div class="form-field wide choice-fields"><label>选项（每行一个）</label><textarea class="textarea" name="questions[__INDEX__][options]" data-question-options></textarea><p class="form-hint">选择题填写 2–8 个选项。</p></div>
+                    <div class="form-field"><label data-answer-label>正确选项</label><select class="select choice-answer" name="questions[__INDEX__][answer]" data-choice-answer><option value="A">A</option><option value="B">B</option></select><input class="input fill-answer" name="questions[__INDEX__][answer]" hidden disabled><p class="form-hint answer-hint">选择正确选项字母。</p></div>
+                    <div class="form-field wide"><label>答案解析</label><textarea class="textarea" name="questions[__INDEX__][explanation]"></textarea></div>
+                </div>
+            </div></template>
+            <div class="section-actions"><button class="btn" type="submit">保存阅读理解题</button><span class="helper">支持选择题和填空题；删除题目后保存才会生效。</span></div>
+        </form>
+    </div></section>
     @endif
 </div><aside class="form-stack">
     <section class="card"><div class="card-header"><h2>编辑提示</h2></div><div class="card-body"><p class="helper">文章保存后默认为草稿。发布和下架操作在文章列表中进行。</p></div></section>
@@ -65,4 +107,4 @@
 </aside></div>
 @endsection
 @push('head')<link rel="stylesheet" href="{{ asset('admin-assets/article-images.css') }}">@endpush
-@push('scripts')<script src="{{ asset('admin-assets/editor.js') }}" defer></script>@endpush
+@push('scripts')<script src="{{ asset('admin-assets/editor.js') }}" defer></script><script src="{{ asset('admin-assets/article-questions.js') }}" defer></script>@endpush

@@ -73,6 +73,11 @@ class ContentController extends Controller
                 $article->analysis->html = $sanitizer->clean($article->analysis->html ?? '');
             }
             $article->wordIds = DB::table('reading_words')->where('reading_item_id', $id)->orderBy('sort_order')->pluck('word_id')->map(fn ($id): int => (int) $id)->all();
+            $article->questions = DB::table('reading_questions')->where('reading_item_id', $id)->orderBy('sort_order')->get()->map(function ($question) {
+                $question->options = $question->options_json ? (json_decode($question->options_json, true) ?: []) : [];
+                $question->answerIndex = $question->kind === 'choice' ? (int) $question->answer : 0;
+                return $question;
+            });
         }
 
         return view('admin.articles.form', [
@@ -230,6 +235,74 @@ class ContentController extends Controller
         });
 
         return redirect()->route('admin.articles.edit', $id)->with('success', '重点词汇顺序已保存');
+    }
+
+    public function saveReadingQuestions(Request $request, int $id): RedirectResponse
+    {
+        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        $data = $request->validate([
+            'questions' => 'nullable|array|max:100',
+            'questions.*.id' => 'nullable|integer',
+            'questions.*.questionType' => 'required|string|max:32',
+            'questions.*.kind' => 'required|in:choice,fill',
+            'questions.*.prompt' => 'required|string|max:5000',
+            'questions.*.promptCn' => 'nullable|string|max:5000',
+            'questions.*.options' => 'nullable|string|max:10000',
+            'questions.*.answer' => 'required|string|max:5000',
+            'questions.*.explanation' => 'nullable|string|max:10000',
+        ]);
+
+        $rows = [];
+        foreach ($data['questions'] ?? [] as $index => $item) {
+            $options = array_values(array_filter(array_map('trim', preg_split('/\\R/u', $item['options'] ?? '') ?: []), fn (string $option): bool => $option !== ''));
+            if ($item['kind'] === 'choice') {
+                if (count($options) < 2 || count($options) > 8) {
+                    return back()->withErrors(["questions.$index.options" => '选择题需要填写 2 至 8 个选项，每行一个'])->withInput();
+                }
+                $answerLetter = strtoupper(trim($item['answer']));
+                if (! preg_match('/^[A-H]$/', $answerLetter)) {
+                    return back()->withErrors(["questions.$index.answer" => '请选择正确选项字母'])->withInput();
+                }
+                $answerIndex = ord($answerLetter) - ord('A');
+                if ($answerIndex < 0 || $answerIndex >= count($options)) {
+                    return back()->withErrors(["questions.$index.answer" => '正确选项不在已填写的选项范围内'])->withInput();
+                }
+                $answer = (string) $answerIndex;
+                $optionsJson = json_encode($options, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            } else {
+                $answer = trim($item['answer']);
+                $optionsJson = null;
+            }
+            $rows[] = [
+                'id' => isset($item['id']) && $item['id'] !== '' ? (int) $item['id'] : null,
+                'question_type' => $item['questionType'], 'kind' => $item['kind'],
+                'prompt' => $item['prompt'], 'prompt_cn' => $item['promptCn'] ?? null,
+                'options_json' => $optionsJson, 'answer' => $answer,
+                'explanation' => $item['explanation'] ?? null, 'sort_order' => $index + 1,
+            ];
+        }
+
+        DB::transaction(function () use ($id, $rows): void {
+            $existingIds = DB::table('reading_questions')->where('reading_item_id', $id)->pluck('id')->map(fn ($value): int => (int) $value)->all();
+            $submittedIds = array_values(array_filter(array_column($rows, 'id')));
+            abort_if(array_diff($submittedIds, $existingIds) !== [], 422, '题目不属于当前文章');
+            DB::table('reading_questions')->where('reading_item_id', $id)->whereNotIn('id', $submittedIds ?: [0])->delete();
+            DB::table('reading_questions')->where('reading_item_id', $id)->increment('sort_order', 100000);
+            foreach ($rows as $row) {
+                $questionId = $row['id'];
+                unset($row['id']);
+                $row['reading_item_id'] = $id;
+                $row['updated_at'] = now();
+                if ($questionId) {
+                    DB::table('reading_questions')->where('id', $questionId)->where('reading_item_id', $id)->update($row);
+                } else {
+                    $row['created_at'] = now();
+                    DB::table('reading_questions')->insert($row);
+                }
+            }
+        });
+
+        return redirect()->route('admin.articles.edit', $id)->with('success', '阅读理解题已保存');
     }
 
     public function publishArticle(int $id): RedirectResponse
