@@ -41,6 +41,10 @@ function changeExistingPlan(date) {
 }
 function addToPlan() {
   if (!selectedWord.value || alreadyScheduled.value) return
+  if (!form.planDate) {
+    ElMessage.warning(targetMode.value === 'new' ? '请先选择新计划日期' : '请先选择一个已有计划')
+    return
+  }
   form.post(`/admin/words/${selectedWord.value.id}/daily-plans`, {
     preserveScroll: true,
     onSuccess: () => { planDialog.value = false; ElMessage.success('已加入每日计划') },
@@ -112,12 +116,12 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
             <el-option v-for="plan in availableDailyPlans" :key="plan.plan_date" :value="plan.plan_date" :label="`${plan.plan_date} · ${plan.status === 'published' ? '已发布' : '草稿'} · ${plan.word_count}个词`" />
           </el-select>
         </div>
-        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" placeholder="请选择新计划日期" :disabled-date="date => localDate(date) < localDate() || existingPlanDates.has(localDate(date))" /></div>
+        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" placeholder="请选择新计划日期" :disabled-date="date => localDate(date) < localDate() || existingPlanDates.has(localDate(date))" @change="date => form.planDate = date || ''" /><small class="table-secondary">请选择尚未创建每日计划的日期。</small></div>
         <el-alert v-if="alreadyScheduled" title="这个单词已经安排在该日计划中" type="success" :closable="false" />
         <el-alert v-else title="同一个单词可安排在不同日期复习；仅不能重复加入同一天。新词加入后按未完成处理。新日期会建立草稿计划。" type="info" :closable="false" />
         <small v-if="form.errors.planDate || form.errors.dailyPlan" class="form-error">{{ form.errors.planDate || form.errors.dailyPlan }}</small>
       </div>
-      <template #footer><el-button @click="planDialog = false">取消</el-button><el-button type="primary" :loading="form.processing" :disabled="alreadyScheduled || !form.planDate" @click="addToPlan">确认加入</el-button></template>
+      <template #footer><el-button @click="planDialog = false">取消</el-button><el-button type="primary" :loading="form.processing" :disabled="alreadyScheduled" @click="addToPlan">确认加入</el-button></template>
     </el-dialog>
   </AdminLayout>
 </template>
