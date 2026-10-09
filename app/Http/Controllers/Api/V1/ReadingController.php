@@ -223,6 +223,9 @@ class ReadingController extends Controller
             'translation' => $item->translation,
             'level' => $item->level,
             'minutes' => $item->minutes,
+            'rightsType' => $item->rights_type ?? null,
+            'rightsTypeLabel' => $this->rightsTypeLabel($item->rights_type ?? null),
+            'rightsNote' => $item->rights_note ?? null,
             'coverAsset' => $item->cover_asset,
             'coverUrl' => ReadingCover::url($item->cover_asset),
             'detailImageUrl' => ReadingCover::url($item->detail_image_asset),
@@ -238,6 +241,9 @@ class ReadingController extends Controller
             'author' => $series->author,
             'level' => $series->level,
             'description' => $series->description,
+            'rightsType' => $series->rights_type,
+            'rightsTypeLabel' => $this->rightsTypeLabel($series->rights_type),
+            'rightsNote' => $series->rights_note,
             'coverAsset' => $series->cover_asset,
             'coverUrl' => ReadingCover::url($series->cover_asset),
             'chapterCount' => (int) ($series->chapter_count ?? DB::table('reading_items')->where('series_id', $series->id)->where('kind', 'chapter')->where('status', 'published')->count()),
@@ -257,5 +263,16 @@ class ReadingController extends Controller
     private function notFound(): JsonResponse
     {
         return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '内容不存在']], 404);
+    }
+
+    private function rightsTypeLabel(?string $type): ?string
+    {
+        return [
+            'original' => '原创',
+            'authorized' => '已获授权',
+            'public_domain' => '公版作品',
+            'excerpt' => '摘编 / 节选',
+            'other' => '其他',
+        ][$type] ?? null;
     }
 }
