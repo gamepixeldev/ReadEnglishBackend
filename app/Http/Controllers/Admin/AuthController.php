@@ -7,13 +7,15 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class AuthController extends Controller
 {
-    public function showLogin(): View|RedirectResponse
+    public function showLogin(): InertiaResponse|RedirectResponse
     {
         if (Auth::check() && Auth::user()->is_admin) return redirect()->route('admin.dashboard');
-        return view('admin.login');
+        return Inertia::render('Admin/Login');
     }
 
     public function login(Request $request): RedirectResponse

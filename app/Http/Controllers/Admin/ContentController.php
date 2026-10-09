@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response as InertiaResponse;
 
 class ContentController extends Controller
 {
@@ -28,9 +30,9 @@ class ContentController extends Controller
         return redirect()->route($create ? 'admin.articles.create' : ($id ? 'admin.articles.edit' : 'admin.articles.index'), $id ? ['id' => $id] : []);
     }
 
-    public function dashboard(): View
+    public function dashboard(): InertiaResponse
     {
-        return view('admin.dashboard', [
+        return Inertia::render('Admin/Dashboard', [
             'articleCount' => DB::table('reading_items')->where('kind', 'article')->count(),
             'publishedArticles' => DB::table('reading_items')->where('kind', 'article')->where('status', 'published')->count(),
             'wordCount' => DB::table('words')->count(),
@@ -41,7 +43,7 @@ class ContentController extends Controller
         ]);
     }
 
-    public function articles(Request $request): View
+    public function articles(Request $request): InertiaResponse
     {
         $search = trim((string) $request->query('q', ''));
         $status = in_array($request->query('status'), ['draft', 'published'], true) ? $request->query('status') : null;
@@ -54,14 +56,14 @@ class ContentController extends Controller
         }
         if ($status) $query->where('status', $status);
 
-        return view('admin.articles.index', [
+        return Inertia::render('Admin/Articles/Index', [
             'articles' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
             'search' => $search,
             'status' => $status,
         ]);
     }
 
-    public function articleForm(HtmlContentSanitizer $sanitizer, ?int $id = null): View
+    public function articleForm(HtmlContentSanitizer $sanitizer, ?int $id = null): InertiaResponse
     {
         $article = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first() : null;
         if ($id) abort_unless($article, 404);
@@ -80,7 +82,7 @@ class ContentController extends Controller
             });
         }
 
-        return view('admin.articles.form', [
+        return Inertia::render('Admin/Articles/Form', [
             'article' => $article,
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
@@ -91,7 +93,7 @@ class ContentController extends Controller
         ]);
     }
 
-    public function words(Request $request): View
+    public function words(Request $request): InertiaResponse
     {
         $search = trim((string) $request->query('q', ''));
         $status = in_array($request->query('status'), ['draft', 'published'], true) ? $request->query('status') : null;
@@ -104,14 +106,14 @@ class ContentController extends Controller
         }
         if ($status) $query->where('status', $status);
 
-        return view('admin.words.index', [
+        return Inertia::render('Admin/Words/Index', [
             'words' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
             'search' => $search,
             'status' => $status,
         ]);
     }
 
-    public function wordForm(HtmlContentSanitizer $sanitizer, ?int $id = null): View
+    public function wordForm(HtmlContentSanitizer $sanitizer, ?int $id = null): InertiaResponse
     {
         $word = $id ? DB::table('words')->where('id', $id)->first() : null;
         if ($id) abort_unless($word, 404);
@@ -120,12 +122,12 @@ class ContentController extends Controller
             if ($word->detail?->type === 'richtext') $word->detail->html = $sanitizer->clean($word->detail->html ?? '');
         }
 
-        return view('admin.words.form', compact('word'));
+        return Inertia::render('Admin/Words/Form', compact('word'));
     }
 
-    public function passwordForm(): View
+    public function passwordForm(): InertiaResponse
     {
-        return view('admin.password');
+        return Inertia::render('Admin/Password');
     }
 
     public function saveArticle(Request $request, ?int $id = null): RedirectResponse
