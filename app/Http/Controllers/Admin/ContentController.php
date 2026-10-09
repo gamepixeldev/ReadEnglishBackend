@@ -308,11 +308,19 @@ class ContentController extends Controller
             ])->values();
             return $word;
         });
+        $availableDailyPlans = DB::table('daily_word_plans as p')
+            ->leftJoin('daily_word_plan_items as i', 'i.plan_id', '=', 'p.id')
+            ->where('p.plan_date', '>=', now('Asia/Shanghai')->toDateString())
+            ->select('p.plan_date', 'p.status')
+            ->selectRaw('count(i.word_id) as word_count')
+            ->groupBy('p.id', 'p.plan_date', 'p.status')
+            ->orderBy('p.plan_date')->get();
 
         return Inertia::render('Admin/Words/Index', [
             'words' => $wordPage,
             'search' => $search,
             'status' => $status,
+            'availableDailyPlans' => $availableDailyPlans,
         ]);
     }
 
