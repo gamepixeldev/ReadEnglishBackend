@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\HtmlContentSanitizer;
+use App\Services\WordSensePresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -250,10 +251,12 @@ class ContentAdminController extends Controller
         if (isset($filters['status'])) $query->where('status', $filters['status']);
         if (isset($filters['q'])) $query->where('headword', 'like', '%'.$filters['q'].'%');
         $items = $query->orderBy('headword')->limit($filters['limit'] ?? 50)->get();
+        $sensesByWord = WordSensePresenter::many($items->pluck('id'));
 
         return response()->json(['items' => $items->map(fn (object $word): array => [
             'id' => (int) $word->id, 'headword' => $word->headword, 'ipa' => $word->ipa,
-            'partOfSpeech' => $word->part_of_speech, 'meaning' => $word->meaning, 'status' => $word->status,
+            ...WordSensePresenter::summary($sensesByWord[$word->id] ?? [], $word->part_of_speech, $word->meaning),
+            'status' => $word->status,
         ])]);
     }
 
@@ -277,6 +280,10 @@ class ContentAdminController extends Controller
             'frequency_label' => $data['frequencyLabel'] ?? null, 'audio_asset' => $data['audioAsset'] ?? null,
             'status' => 'draft', 'created_at' => now(), 'updated_at' => now(),
         ]);
+        DB::table('word_senses')->insert([
+            'word_id' => $id, 'part_of_speech' => $data['partOfSpeech'] ?? null,
+            'meaning' => $data['meaning'], 'sort_order' => 1, 'created_at' => now(), 'updated_at' => now(),
+        ]);
 
         return response()->json($this->wordDetail($id), 201);
     }
@@ -296,6 +303,16 @@ class ContentAdminController extends Controller
         if ($update !== []) {
             $update['updated_at'] = now();
             DB::table('words')->where('id', $id)->update($update);
+        }
+        if (array_key_exists('meaning', $data) || array_key_exists('partOfSpeech', $data)) {
+            $firstSense = DB::table('word_senses')->where('word_id', $id)->orderBy('sort_order')->orderBy('id')->first();
+            if ($firstSense) {
+                DB::table('word_senses')->where('id', $firstSense->id)->update([
+                    'meaning' => $data['meaning'] ?? $firstSense->meaning,
+                    'part_of_speech' => $data['partOfSpeech'] ?? $firstSense->part_of_speech,
+                    'updated_at' => now(),
+                ]);
+            }
         }
 
         return response()->json($this->wordDetail($id));
@@ -334,6 +351,7 @@ class ContentAdminController extends Controller
         $word = DB::table('words')->where('id', $id)->first();
         if (! $word) return $this->notFound();
         $detail = DB::table('word_details')->where('word_id', $id)->first();
+        $senseData = WordSensePresenter::summary(WordSensePresenter::many([$id])[$id] ?? [], $word->part_of_speech, $word->meaning);
         if (! $detail || ($detail->type === 'richtext' && trim(strip_tags((string) $detail->html)) === '') || ($detail->type === 'officialAccount' && ! $detail->url)) {
             return response()->json(['error' => ['code' => 'CONTENT_INCOMPLETE', 'message' => '请先添加单词详解内容再发布']], 422);
         }
@@ -363,7 +381,7 @@ class ContentAdminController extends Controller
 
         return [
             'id' => (int) $word->id, 'slug' => $word->slug, 'headword' => $word->headword,
-            'ipa' => $word->ipa, 'partOfSpeech' => $word->part_of_speech, 'meaning' => $word->meaning,
+            'ipa' => $word->ipa, ...$senseData,
             'frequencyLabel' => $word->frequency_label, 'audioAsset' => $word->audio_asset,
             'status' => $word->status,
             'detail' => $detail ? [

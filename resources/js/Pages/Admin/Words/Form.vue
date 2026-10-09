@@ -7,14 +7,20 @@ const props = defineProps({ word: Object })
 const editing = Boolean(props.word)
 const detail = props.word?.detail || {}
 const editor = ref(null)
+let nextSenseKey = 0
+function makeSense(sense = {}) {
+  return { key: ++nextSenseKey, partOfSpeech: sense.part_of_speech || '', meaning: sense.meaning || '' }
+}
 const form = useForm({
   headword: props.word?.headword || '', ipa: props.word?.ipa || '',
-  partOfSpeech: props.word?.part_of_speech || '', meaning: props.word?.meaning || '',
+  senses: props.word?.senses?.length ? props.word.senses.map(makeSense) : [makeSense({part_of_speech: props.word?.part_of_speech, meaning: props.word?.meaning})],
   frequencyLabel: props.word?.frequency_label || '', audioAsset: props.word?.audio_asset || '',
   slug: props.word?.slug || '', detailType: detail.type || 'richtext',
   detailFormat: detail.format || 'html', detailHtml: detail.html || '',
   detailUrl: detail.url || '', detailTitle: detail.title || '', detailSummary: detail.summary || ''
 })
+function addSense() { form.senses.push(makeSense()) }
+function removeSense(index) { if (form.senses.length > 1) form.senses.splice(index, 1) }
 function save() { form.submit(editing ? 'put' : 'post', editing ? `/admin/words/${props.word.id}` : '/admin/words') }
 function publish() { router.post(`/admin/words/${props.word.id}/${props.word.status === 'published' ? 'unpublish' : 'publish'}`) }
 function command(name, value) {
@@ -34,13 +40,22 @@ function command(name, value) {
           <div class="form-grid">
             <div class="form-field"><label>单词 <b class="required-mark">*</b></label><el-input v-model="form.headword" /><small v-if="form.errors.headword" class="form-error">{{ form.errors.headword }}</small></div>
             <div class="form-field"><label>音标</label><el-input v-model="form.ipa" /></div>
-            <div class="form-field"><label>词性</label><el-input v-model="form.partOfSpeech" placeholder="n. / v. / adj." /></div>
-            <div class="form-field"><label>简明释义 <b class="required-mark">*</b></label><el-input v-model="form.meaning" /><small v-if="form.errors.meaning" class="form-error">{{ form.errors.meaning }}</small></div>
             <div class="form-field"><label>频率标签</label><el-input v-model="form.frequencyLabel" /></div>
             <div class="form-field"><label>发音资源路径</label><el-input v-model="form.audioAsset" /></div>
             <div class="form-field"><label>内容标识 slug</label><el-input v-model="form.slug" /></div>
             <div class="form-field"><label>详解形式</label><el-select v-model="form.detailType"><el-option value="richtext" label="富文本详解" /><el-option value="officialAccount" label="公众号文章链接" /></el-select></div>
           </div>
+          <section class="sense-editor">
+            <div class="sense-editor-head"><div><strong>词性与简明释义</strong><p>一个词性对应一条释义；同一单词有多种用法时可分别添加。</p></div><el-button @click="addSense">＋ 添加释义</el-button></div>
+            <div v-for="(sense, index) in form.senses" :key="sense.key" class="sense-row">
+              <span class="sense-order">{{ index + 1 }}</span>
+              <div class="form-field"><label>词性</label><el-input v-model="sense.partOfSpeech" placeholder="例如 n. / v. / adj." /></div>
+              <div class="form-field"><label>简明释义 <b class="required-mark">*</b></label><el-input v-model="sense.meaning" placeholder="填写这个词性下的常用含义" /></div>
+              <el-button v-if="form.senses.length > 1" link type="danger" @click="removeSense(index)">删除</el-button>
+            </div>
+            <small v-if="form.errors.senses" class="form-error">{{ form.errors.senses }}</small>
+            <small v-if="form.errors['senses.0.meaning']" class="form-error">{{ form.errors['senses.0.meaning'] }}</small>
+          </section>
           <div v-if="form.detailType === 'richtext'" class="form-field">
             <label>单词详解正文 <b class="required-mark">*</b></label>
             <el-radio-group v-model="form.detailFormat"><el-radio-button value="html">富文本</el-radio-button><el-radio-button value="markdown">Markdown</el-radio-button></el-radio-group>
@@ -67,3 +82,7 @@ function command(name, value) {
     </div>
   </AdminLayout>
 </template>
+
+<style scoped>
+.sense-editor{display:grid;gap:12px;padding:16px;border:1px solid #e4e9f1;border-radius:9px;background:#fbfcfe}.sense-editor-head{display:flex;justify-content:space-between;align-items:center;gap:12px}.sense-editor-head strong{color:#263449}.sense-editor-head p{margin:5px 0 0;color:#8590a0;font-size:12px}.sense-row{display:grid;grid-template-columns:28px minmax(130px,.7fr) minmax(220px,1.6fr) auto;gap:12px;align-items:end;padding:12px;background:#fff;border:1px solid #e8ecf2;border-radius:7px}.sense-order{align-self:center;color:#8a96a7;font-weight:700;text-align:center}@media(max-width:800px){.sense-row{grid-template-columns:24px 1fr}.sense-row .form-field:nth-child(3){grid-column:2}.sense-row :deep(.el-button){grid-column:2;justify-self:start}}
+</style>

@@ -33,6 +33,11 @@ class DailyWordPlanController extends Controller
             ->join('words as w', 'w.id', '=', 'i.word_id')
             ->where('i.plan_id', $id)->orderBy('i.sort_order')
             ->get(['w.id', 'w.headword', 'w.meaning', 'w.status']) : collect();
+        $sensesByWord = \App\Services\WordSensePresenter::many($selectedWords->pluck('id'));
+        $selectedWords->transform(function (object $word) use ($sensesByWord): object {
+            $word->meaning = \App\Services\WordSensePresenter::summary($sensesByWord[$word->id] ?? [], null, $word->meaning)['meaning'];
+            return $word;
+        });
 
         return Inertia::render('Admin/DailyWords/Form', [
             'plan' => $plan,
@@ -46,9 +51,15 @@ class DailyWordPlanController extends Controller
         if ($search === '') return response()->json(['items' => []]);
         $words = DB::table('words')->where('status', 'published')
             ->when($search !== '', fn ($query) => $query->where(function ($match) use ($search): void {
-                $match->where('headword', 'like', '%'.$search.'%')->orWhere('meaning', 'like', '%'.$search.'%');
+                $match->where('headword', 'like', '%'.$search.'%')->orWhere('meaning', 'like', '%'.$search.'%')
+                    ->orWhereExists(fn ($senses) => $senses->selectRaw('1')->from('word_senses')->whereColumn('word_senses.word_id', 'words.id')->where('word_senses.meaning', 'like', '%'.$search.'%'));
             }))
             ->orderBy('headword')->limit(30)->get(['id', 'headword', 'meaning']);
+        $sensesByWord = \App\Services\WordSensePresenter::many($words->pluck('id'));
+        $words->transform(function (object $word) use ($sensesByWord): object {
+            $word->meaning = \App\Services\WordSensePresenter::summary($sensesByWord[$word->id] ?? [], null, $word->meaning)['meaning'];
+            return $word;
+        });
 
         return response()->json(['items' => $words]);
     }

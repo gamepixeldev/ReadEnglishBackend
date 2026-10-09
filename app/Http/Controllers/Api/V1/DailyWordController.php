@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\WordSensePresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
 
@@ -19,15 +20,19 @@ class DailyWordController extends Controller
         if (! $plan || $plan->status !== 'published') {
             return response()->json(['date' => $date, 'planId' => null, 'items' => []]);
         }
-        $items = DB::table('daily_word_plan_items as i')
+        $rows = DB::table('daily_word_plan_items as i')
             ->join('words as w', 'w.id', '=', 'i.word_id')
             ->where('i.plan_id', $plan->id)->where('w.status', 'published')
-            ->orderBy('i.sort_order')->get()
-            ->map(fn ($row) => [
+            ->orderBy('i.sort_order')->get();
+        $sensesByWord = WordSensePresenter::many($rows->pluck('word_id'));
+        $items = $rows->map(function ($row) use ($sensesByWord): array {
+            $senseData = WordSensePresenter::summary($sensesByWord[$row->word_id] ?? [], $row->part_of_speech, $row->meaning);
+            return [
                 'id' => (int) $row->word_id, 'headword' => $row->headword,
-                'ipa' => $row->ipa, 'partOfSpeech' => $row->part_of_speech,
-                'meaning' => $row->meaning, 'frequencyLabel' => $row->frequency_label,
-            ]);
+                'ipa' => $row->ipa, 'partOfSpeech' => $senseData['partOfSpeech'], 'senses' => $senseData['senses'],
+                'meaning' => $senseData['meaning'], 'frequencyLabel' => $row->frequency_label,
+            ];
+        });
 
         return response()->json(['date' => $date, 'planId' => $plan->id, 'items' => $items]);
     }

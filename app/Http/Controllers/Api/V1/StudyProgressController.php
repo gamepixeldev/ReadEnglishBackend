@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\WordSensePresenter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -17,14 +18,19 @@ class StudyProgressController extends Controller
         $wordIds = DB::table('word_learning_events')->where('user_id', $userId)->distinct()->pluck('word_id');
         $favoriteIds = DB::table('word_favorites')->where('user_id', $userId)->pluck('word_id');
         $allWordIds = $wordIds->concat($favoriteIds)->unique()->values();
-        $wordSummaries = DB::table('words')->whereIn('id', $allWordIds)
-            ->select('id', 'headword', 'part_of_speech', 'meaning')->get()
-            ->mapWithKeys(fn ($word) => [$word->id => [
+        $wordRows = DB::table('words')->whereIn('id', $allWordIds)
+            ->select('id', 'headword', 'part_of_speech', 'meaning')->get();
+        $sensesByWord = WordSensePresenter::many($wordRows->pluck('id'));
+        $wordSummaries = $wordRows->mapWithKeys(function ($word) use ($sensesByWord): array {
+            $senseData = WordSensePresenter::summary($sensesByWord[$word->id] ?? [], $word->part_of_speech, $word->meaning);
+            return [$word->id => [
                 'id' => (int) $word->id,
                 'headword' => $word->headword,
-                'partOfSpeech' => $word->part_of_speech,
-                'meaning' => $word->meaning,
-            ]]);
+                'partOfSpeech' => $senseData['partOfSpeech'],
+                'meaning' => $senseData['meaning'],
+                'senses' => $senseData['senses'],
+            ]];
+        });
         $puzzles = DB::table('puzzle_progress')->where('user_id', $userId)->get()
             ->mapWithKeys(fn ($row) => [$row->puzzle_set_id => [
                 'cursor' => (int) $row->cursor_next,

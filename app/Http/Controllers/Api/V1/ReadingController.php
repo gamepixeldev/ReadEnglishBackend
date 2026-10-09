@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\HtmlContentSanitizer;
+use App\Services\WordSensePresenter;
 use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -82,20 +83,25 @@ class ReadingController extends Controller
             return $this->notFound();
         }
 
-        $items = DB::table('reading_words as rw')
+        $rows = DB::table('reading_words as rw')
             ->join('words as w', 'w.id', '=', 'rw.word_id')
             ->where('rw.reading_item_id', $id)
             ->where('w.status', 'published')
             ->orderBy('rw.sort_order')
-            ->get(['w.id', 'w.headword', 'w.ipa', 'w.part_of_speech', 'w.meaning', 'rw.sort_order'])
-            ->map(fn ($word) => [
+            ->get(['w.id', 'w.headword', 'w.ipa', 'w.part_of_speech', 'w.meaning', 'rw.sort_order']);
+        $sensesByWord = WordSensePresenter::many($rows->pluck('id'));
+        $items = $rows->map(function ($word) use ($sensesByWord): array {
+            $senseData = WordSensePresenter::summary($sensesByWord[$word->id] ?? [], $word->part_of_speech, $word->meaning);
+            return [
                 'wordId' => $word->id,
                 'headword' => $word->headword,
                 'ipa' => $word->ipa,
-                'partOfSpeech' => $word->part_of_speech,
-                'meaning' => $word->meaning,
+                'partOfSpeech' => $senseData['partOfSpeech'],
+                'meaning' => $senseData['meaning'],
+                'senses' => $senseData['senses'],
                 'sortOrder' => $word->sort_order,
-            ]);
+            ];
+        });
 
         return response()->json(['items' => $items]);
     }

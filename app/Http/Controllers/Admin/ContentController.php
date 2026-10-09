@@ -287,13 +287,21 @@ class ContentController extends Controller
         if ($search !== '') {
             $query->where(function ($query) use ($search): void {
                 $query->where('headword', 'like', '%'.$search.'%')
-                    ->orWhere('meaning', 'like', '%'.$search.'%');
+                    ->orWhere('meaning', 'like', '%'.$search.'%')
+                    ->orWhereExists(fn ($senses) => $senses->selectRaw('1')->from('word_senses')->whereColumn('word_senses.word_id', 'words.id')->where('word_senses.meaning', 'like', '%'.$search.'%'));
             });
         }
         if ($status) $query->where('status', $status);
 
+        $wordPage = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString();
+        $sensesByWord = \App\Services\WordSensePresenter::many($wordPage->getCollection()->pluck('id'));
+        $wordPage->getCollection()->transform(function (object $word) use ($sensesByWord): object {
+            $word->meaning = \App\Services\WordSensePresenter::summary($sensesByWord[$word->id] ?? [], $word->part_of_speech, $word->meaning)['meaning'];
+            return $word;
+        });
+
         return Inertia::render('Admin/Words/Index', [
-            'words' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'words' => $wordPage,
             'search' => $search,
             'status' => $status,
         ]);
@@ -304,6 +312,7 @@ class ContentController extends Controller
         $word = $id ? DB::table('words')->where('id', $id)->first() : null;
         if ($id) abort_unless($word, 404);
         if ($word) {
+            $word->senses = DB::table('word_senses')->where('word_id', $id)->orderBy('sort_order')->orderBy('id')->get();
             $word->detail = DB::table('word_details')->where('word_id', $id)->first();
             if ($word->detail?->type === 'richtext' && ($word->detail->format ?? 'html') === 'html') $word->detail->html = $sanitizer->clean($word->detail->html ?? '');
         }
@@ -558,8 +567,14 @@ class ContentController extends Controller
         $data = $request->validate(['q' => 'required|string|min:1|max:100']);
         $query = trim($data['q']);
         $items = DB::table('words')->where(function ($words) use ($query): void {
-            $words->where('headword', 'like', '%'.$query.'%')->orWhere('meaning', 'like', '%'.$query.'%');
+            $words->where('headword', 'like', '%'.$query.'%')->orWhere('meaning', 'like', '%'.$query.'%')
+                ->orWhereExists(fn ($senses) => $senses->selectRaw('1')->from('word_senses')->whereColumn('word_senses.word_id', 'words.id')->where('word_senses.meaning', 'like', '%'.$query.'%'));
         })->orderBy('headword')->limit(20)->get(['id', 'headword', 'meaning', 'status']);
+        $sensesByWord = \App\Services\WordSensePresenter::many($items->pluck('id'));
+        $items->transform(function (object $word) use ($sensesByWord): object {
+            $word->meaning = \App\Services\WordSensePresenter::summary($sensesByWord[$word->id] ?? [], null, $word->meaning)['meaning'];
+            return $word;
+        });
 
         return response()->json(['items' => $items]);
     }
@@ -582,6 +597,11 @@ class ContentController extends Controller
                 'word_id' => $wordId, 'type' => 'richtext', 'status' => 'draft',
                 'created_at' => $now, 'updated_at' => $now,
             ]);
+            DB::table('word_senses')->insert([
+                'word_id' => $wordId, 'part_of_speech' => $data['partOfSpeech'] ?? null,
+                'meaning' => trim($data['meaning']), 'sort_order' => 1,
+                'created_at' => $now, 'updated_at' => $now,
+            ]);
             $sortOrder = (int) DB::table('reading_words')->where('reading_item_id', $id)->max('sort_order') + 1;
             DB::table('reading_words')->insert([
                 'reading_item_id' => $id, 'word_id' => $wordId, 'sort_order' => $sortOrder,
@@ -601,7 +621,9 @@ class ContentController extends Controller
         $data = $request->validate([
             'slug' => ['nullable', 'string', 'max:100', Rule::unique('words', 'slug')->ignore($id)],
             'headword' => 'required|string|max:255', 'ipa' => 'nullable|string|max:255',
-            'partOfSpeech' => 'nullable|string|max:64', 'meaning' => 'required|string|max:255',
+            'senses' => 'required|array|min:1|max:20',
+            'senses.*.partOfSpeech' => 'nullable|string|max:64',
+            'senses.*.meaning' => 'required|string|max:255',
             'frequencyLabel' => 'nullable|string|max:255', 'audioAsset' => 'nullable|string|max:255',
             'detailType' => 'required|in:richtext,officialAccount',
             'detailFormat' => 'sometimes|in:html,markdown',
@@ -617,12 +639,23 @@ class ContentController extends Controller
         }
         $html = $format === 'markdown' ? $source : $rendered;
 
+        $senses = collect($data['senses'])->map(fn (array $sense): array => [
+            'part_of_speech' => trim((string) ($sense['partOfSpeech'] ?? '')) ?: null,
+            'meaning' => trim($sense['meaning']),
+        ])->values();
+        if ($senses->contains(fn (array $sense): bool => $sense['meaning'] === '')) {
+            return back()->withErrors(['senses' => '每条释义都需要填写简明释义'])->withInput();
+        }
+        $summaryMeaning = $senses->first()['meaning'];
+        $summaryPartOfSpeech = $senses->pluck('part_of_speech')->filter()->unique()->implode(' / ');
+
         $wordRow = [
             'slug' => $data['slug'] ?? null, 'headword' => $data['headword'], 'ipa' => $data['ipa'] ?? null,
-            'part_of_speech' => $data['partOfSpeech'] ?? null, 'meaning' => $data['meaning'],
+            'part_of_speech' => $summaryPartOfSpeech ?: null, 'meaning' => $summaryMeaning,
             'frequency_label' => $data['frequencyLabel'] ?? null, 'audio_asset' => $data['audioAsset'] ?? null,
             'updated_at' => now(),
         ];
+        DB::transaction(function () use (&$id, $wordRow, $data, $senses, $format, $html): void {
         if ($id) {
             $word = DB::table('words')->where('id', $id)->first();
             abort_unless($word, 404);
@@ -633,6 +666,13 @@ class ContentController extends Controller
             $id = DB::table('words')->insertGetId($wordRow);
         }
 
+        DB::table('word_senses')->where('word_id', $id)->delete();
+        foreach ($senses as $index => $sense) {
+            DB::table('word_senses')->insert($sense + [
+                'word_id' => $id, 'sort_order' => $index + 1, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
         $now = now();
         $hasDetail = DB::table('word_details')->where('word_id', $id)->exists();
         DB::table('word_details')->updateOrInsert(['word_id' => $id], [
@@ -641,6 +681,7 @@ class ContentController extends Controller
             'status' => DB::table('words')->where('id', $id)->value('status') === 'published' ? 'published' : 'draft',
             'updated_at' => $now,
         ] + ($hasDetail ? [] : ['created_at' => $now]));
+        });
 
         return redirect()->route('admin.words.edit', $id)->with('success', '单词及详解已保存');
     }
