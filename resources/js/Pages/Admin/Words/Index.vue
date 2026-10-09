@@ -39,6 +39,16 @@ function changeExistingPlan(date) {
   selectedPlanDate.value = date
   form.planDate = date
 }
+function changeNewPlanDate(event) {
+  const date = event.target.value
+  if (existingPlanDates.value.has(date)) {
+    form.planDate = ''
+    event.target.value = ''
+    ElMessage.warning('该日期已有计划，请切换到“选择已有计划”')
+    return
+  }
+  form.planDate = date
+}
 function addToPlan() {
   if (!selectedWord.value || alreadyScheduled.value) return
   if (!form.planDate) {
@@ -116,7 +126,7 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
             <el-option v-for="plan in availableDailyPlans" :key="plan.plan_date" :value="plan.plan_date" :label="`${plan.plan_date} · ${plan.status === 'published' ? '已发布' : '草稿'} · ${plan.word_count}个词`" />
           </el-select>
         </div>
-        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" placeholder="请选择新计划日期" :disabled-date="date => localDate(date) < localDate() || existingPlanDates.has(localDate(date))" @change="date => form.planDate = date || ''" /><small class="table-secondary">请选择尚未创建每日计划的日期。</small></div>
+        <div v-if="targetMode === 'new'" class="form-field"><label>新计划日期</label><input class="native-date-input" type="date" :min="localDate()" :value="form.planDate" @change="changeNewPlanDate" /><small class="table-secondary">请选择尚未创建每日计划的日期。</small></div>
         <el-alert v-if="alreadyScheduled" title="这个单词已经安排在该日计划中" type="success" :closable="false" />
         <el-alert v-else title="同一个单词可安排在不同日期复习；仅不能重复加入同一天。新词加入后按未完成处理。新日期会建立草稿计划。" type="info" :closable="false" />
         <small v-if="form.errors.planDate || form.errors.dailyPlan" class="form-error">{{ form.errors.planDate || form.errors.dailyPlan }}</small>
@@ -127,5 +137,5 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
 </template>
 
 <style scoped>
-.plan-tags,.row-actions{display:flex;align-items:center;gap:7px}.plan-dialog-content{display:grid;gap:18px}.plan-dialog-content>div:first-child{display:flex;align-items:center;gap:12px}.plan-dialog-content .el-date-editor,.plan-select{width:100%}.mode-switch{display:flex;gap:8px}
+.plan-tags,.row-actions{display:flex;align-items:center;gap:7px}.plan-dialog-content{display:grid;gap:18px}.plan-dialog-content>div:first-child{display:flex;align-items:center;gap:12px}.plan-select{width:100%}.mode-switch{display:flex;gap:8px}.native-date-input{width:100%;height:40px;padding:0 12px;border:1px solid #dcdfe6;border-radius:4px;background:#fff;color:#303133;font:inherit}.native-date-input:focus{outline:0;border-color:#409eff}
 </style>
