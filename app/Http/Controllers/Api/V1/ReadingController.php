@@ -178,7 +178,10 @@ class ReadingController extends Controller
             'limit' => 'sometimes|integer|min:1|max:50',
             'cursor' => 'sometimes|string',
         ]);
-        $page = DB::table('series')->where('status', 'published')
+        $page = DB::table('series')->where('status', 'published')->select('series.*')->selectSub(
+            DB::table('reading_items')->selectRaw('count(*)')->whereColumn('series_id', 'series.id')->where('kind', 'chapter')->where('status', 'published'),
+            'chapter_count'
+        )
             ->orderBy('sort_order')->orderBy('id')->cursorPaginate($filters['limit'] ?? 20);
 
         return response()->json([
@@ -227,12 +230,19 @@ class ReadingController extends Controller
             'level' => $series->level,
             'description' => $series->description,
             'coverAsset' => $series->cover_asset,
+            'coverUrl' => ReadingCover::url($series->cover_asset),
+            'chapterCount' => (int) ($series->chapter_count ?? DB::table('reading_items')->where('series_id', $series->id)->where('kind', 'chapter')->where('status', 'published')->count()),
         ];
     }
 
     private function publishedReading(int $id): ?object
     {
-        return DB::table('reading_items')->where('id', $id)->where('status', 'published')->first();
+        return DB::table('reading_items')->where('id', $id)->where('status', 'published')
+            ->where(function ($query): void {
+                $query->where('kind', '!=', 'chapter')->orWhereExists(function ($series): void {
+                    $series->selectRaw('1')->from('series')->whereColumn('series.id', 'reading_items.series_id')->where('series.status', 'published');
+                });
+            })->first();
     }
 
     private function notFound(): JsonResponse
