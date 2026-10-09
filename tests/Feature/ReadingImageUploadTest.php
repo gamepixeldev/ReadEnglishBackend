@@ -19,6 +19,7 @@ class ReadingImageUploadTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $article = [
             'title' => 'A Short Story',
+            'rightsType' => 'original',
             'paragraphs' => [['sentences' => 'The sun rose.', 'translation' => '太阳升起来了。']],
         ];
 

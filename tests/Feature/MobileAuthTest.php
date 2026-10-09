@@ -109,4 +109,81 @@ class MobileAuthTest extends TestCase
             'avatar' => UploadedFile::fake()->createWithContent('bad.svg', '<svg></svg>'),
         ], $headers)->assertUnprocessable();
     }
+
+    public function test_study_progress_survives_relogin_and_stays_separate_between_wechat_users(): void
+    {
+        Http::fake(function ($request) {
+            $code = $request->data()['js_code'] ?? '';
+
+            return Http::response(['openid' => $code === 'account-b' ? 'openid-b' : 'openid-a']);
+        });
+
+        $readingId = DB::table('reading_items')->insertGetId([
+            'kind' => 'article', 'title' => 'A story', 'body_json' => '[]', 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $wordId = DB::table('words')->insertGetId([
+            'headword' => 'story', 'meaning' => '故事', 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('reading_words')->insert([
+            'reading_item_id' => $readingId, 'word_id' => $wordId, 'sort_order' => 1,
+        ]);
+        $date = now('Asia/Shanghai')->toDateString();
+        $planId = DB::table('daily_word_plans')->insertGetId([
+            'plan_date' => $date, 'status' => 'published', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('daily_word_plan_items')->insert([
+            'plan_id' => $planId, 'word_id' => $wordId, 'sort_order' => 1,
+        ]);
+        $grammarId = DB::table('grammar_lessons')->insertGetId([
+            'title' => 'Past tense', 'status' => 'published', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $setId = DB::table('puzzle_sets')->insertGetId([
+            'title' => 'Story sentences', 'status' => 'published', 'created_at' => now(), 'updated_at' => now(),
+        ]);
+        foreach ([1, 2, 3] as $order) {
+            DB::table('puzzle_sentences')->insert([
+                'puzzle_set_id' => $setId, 'sort_order' => $order, 'prompt_cn' => '测试',
+                'answer_text' => 'A test.', 'tokens_json' => '[]', 'answer_token_ids_json' => '[]',
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
+
+        $first = $this->postJson('/api/v1/auth/wechat', ['code' => 'account-a'])->assertOk()->json();
+        $firstHeaders = ['Authorization' => 'Bearer '.$first['token']];
+        $this->postJson('/api/v1/me/reading-completions', ['readingItemId' => $readingId], $firstHeaders)->assertOk();
+        $this->postJson('/api/v1/me/word-learning-events', [
+            'wordId' => $wordId, 'sourceKind' => 'reading', 'readingItemId' => $readingId,
+            'requestId' => 'first-word-attempt',
+        ], $firstHeaders)->assertOk();
+        $this->postJson('/api/v1/me/word-learning-events', [
+            'wordId' => $wordId, 'sourceKind' => 'daily', 'planDate' => $date,
+            'requestId' => 'daily-word-attempt',
+        ], $firstHeaders)->assertOk();
+        $this->putJson('/api/v1/me/word-favorites/'.$wordId, [], $firstHeaders)->assertOk();
+        $this->postJson('/api/v1/me/grammar-activity/'.$grammarId, [], $firstHeaders)->assertOk();
+        $this->putJson('/api/v1/me/puzzle-progress/'.$setId, ['cursorNext' => 2], $firstHeaders)->assertOk();
+        $this->postJson('/api/v1/auth/logout', [], $firstHeaders)->assertNoContent();
+        $this->getJson('/api/v1/me/study-progress', $firstHeaders)->assertUnauthorized();
+
+        $second = $this->postJson('/api/v1/auth/wechat', ['code' => 'account-b'])->assertOk()->json();
+        $secondHeaders = ['Authorization' => 'Bearer '.$second['token']];
+        $this->assertNotSame($first['user']['id'], $second['user']['id']);
+        $this->getJson('/api/v1/me/study-progress', $secondHeaders)->assertOk()
+            ->assertJsonCount(0, 'readingIds')->assertJsonCount(0, 'wordIds')
+            ->assertJsonCount(0, 'favoriteWordIds')->assertJsonCount(0, 'recent')
+            ->assertJsonCount(0, 'puzzles')->assertJsonCount(0, 'dailyWordIdsByDate');
+
+        $again = $this->postJson('/api/v1/auth/wechat', ['code' => 'account-a'])->assertOk()->json();
+        $this->assertSame($first['user']['id'], $again['user']['id']);
+        $againHeaders = ['Authorization' => 'Bearer '.$again['token']];
+        $this->getJson('/api/v1/me/study-progress', $againHeaders)->assertOk()
+            ->assertJsonPath('readingIds.0', $readingId)
+            ->assertJsonPath('wordIds.0', $wordId)
+            ->assertJsonPath('favoriteWordIds.0', $wordId)
+            ->assertJsonPath('dailyWordIdsByDate.'.$date.'.0', $wordId)
+            ->assertJsonPath('puzzles.'.$setId.'.cursor', 2)
+            ->assertJsonCount(4, 'recent');
+    }
 }
