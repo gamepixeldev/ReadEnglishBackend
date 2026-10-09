@@ -6,6 +6,7 @@ use App\Http\Controllers\Api\V1\ContentAdminController;
 use App\Http\Controllers\Api\V1\PuzzleController;
 use App\Http\Controllers\Api\V1\ReadingController;
 use App\Http\Controllers\Api\V1\WordController;
+use App\Http\Controllers\Api\V1\StudyProgressController;
 use App\Http\Middleware\RequireContentAdminToken;
 use App\Http\Middleware\AuthenticateMobileToken;
 use Illuminate\Support\Facades\Route;
@@ -19,6 +20,13 @@ Route::prefix('v1')->group(function (): void {
         Route::patch('auth/profile', [MobileAuthController::class, 'updateProfile']);
         Route::post('auth/avatar', [MobileAuthController::class, 'uploadAvatar']);
         Route::post('auth/logout', [MobileAuthController::class, 'logout']);
+        Route::get('me/study-progress', [StudyProgressController::class, 'index']);
+        Route::post('me/reading-completions', [StudyProgressController::class, 'completeReading']);
+        Route::post('me/word-learning-events', [StudyProgressController::class, 'completeWord']);
+        Route::put('me/word-favorites/{id}', [StudyProgressController::class, 'favoriteWord']);
+        Route::delete('me/word-favorites/{id}', [StudyProgressController::class, 'unfavoriteWord']);
+        Route::put('me/puzzle-progress/{id}', [StudyProgressController::class, 'savePuzzle']);
+        Route::post('me/grammar-activity/{id}', [StudyProgressController::class, 'openGrammar']);
     });
     Route::prefix('admin')->middleware(RequireContentAdminToken::class)->group(function (): void {
         Route::get('reading-items', [ContentAdminController::class, 'readings']);
