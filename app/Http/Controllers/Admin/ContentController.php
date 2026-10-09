@@ -114,7 +114,7 @@ class ContentController extends Controller
             'author' => 'nullable|string|max:255', 'level' => ['nullable', 'string', 'max:32', Rule::exists('reading_levels', 'name')],
             'description' => 'nullable|string|max:10000',
             'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
-            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsType' => ['required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
         ]);
         $existing = $id ? DB::table('series')->where('id', $id)->first() : null;
@@ -148,8 +148,8 @@ class ContentController extends Controller
         $series = DB::table('series')->where('id', $id)->first();
         abort_unless($series, 404);
         $hasPublishedChapter = DB::table('reading_items')->where('series_id', $id)->where('kind', 'chapter')->where('status', 'published')->exists();
-        if (! $series->rights_type || ! $series->rights_note || ! $hasPublishedChapter) {
-            return back()->withErrors(['publish' => '发布外刊小说前，请补齐版权来源，并至少发布一个章节。']);
+        if (! $series->rights_type || ! $hasPublishedChapter) {
+            return back()->withErrors(['publish' => '发布外刊小说前，请选择版权来源类型，并至少发布一个章节。']);
         }
         DB::table('series')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
         return redirect()->route('admin.series.index')->with('success', '外刊小说已发布');
@@ -188,8 +188,8 @@ class ContentController extends Controller
         $series = DB::table('series')->where('id', $seriesId)->first();
         $body = json_decode($chapter->body_json, true) ?: [];
         $hasSentences = collect($body)->contains(fn ($paragraph) => collect($paragraph['sentences'] ?? [])->contains(fn ($sentence) => trim((string) $sentence) !== ''));
-        if (! trim($chapter->title) || ! $hasSentences || ! ($chapter->rights_type || $series->rights_type) || ! ($chapter->rights_note || $series->rights_note)) {
-            return back()->withErrors(['publish' => '发布章节前，请补齐章节标题、英文正文，以及章节或小说级的版权来源信息。']);
+        if (! trim($chapter->title) || ! $hasSentences || ! ($chapter->rights_type || $series->rights_type)) {
+            return back()->withErrors(['publish' => '发布章节前，请补齐章节标题、英文正文，以及章节或小说级的版权来源类型。']);
         }
         DB::transaction(function () use ($id): void {
             DB::table('reading_items')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
@@ -337,7 +337,9 @@ class ContentController extends Controller
             'paragraphs.*.translation' => 'required|string|max:5000',
             'paragraphs.*.sentenceTranslations' => 'sometimes|array',
             'paragraphs.*.sentenceTranslations.*' => 'nullable|string|max:5000',
-            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsType' => $kind === 'article'
+                ? ['required', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])]
+                : ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
         ]);
         $body = [];
@@ -698,7 +700,7 @@ class ContentController extends Controller
             ['key' => 'title', 'label' => '英文标题', 'passed' => trim((string) $article->title) !== '', 'required' => true],
             ['key' => 'body', 'label' => '英文正文', 'passed' => $sentences->isNotEmpty(), 'required' => true],
             ['key' => 'translation', 'label' => '各段中文翻译', 'passed' => $hasParagraphTranslations, 'required' => true],
-            ['key' => 'rights', 'label' => '版权来源与说明', 'passed' => trim((string) $article->rights_type) !== '' && trim((string) $article->rights_note) !== '', 'required' => true],
+            ['key' => 'rights', 'label' => '版权来源类型', 'passed' => trim((string) $article->rights_type) !== '', 'required' => true],
             ['key' => 'cover', 'label' => '文章封面', 'passed' => trim((string) $article->cover_asset) !== '', 'required' => false],
             ['key' => 'sentenceTranslations', 'label' => '逐句翻译', 'passed' => $hasSentenceTranslations, 'required' => false],
             ['key' => 'words', 'label' => '重点词汇', 'passed' => $wordCount > 0, 'required' => false, 'detail' => $wordCount ? $wordCount.' 个' : null],
