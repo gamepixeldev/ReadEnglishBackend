@@ -6,6 +6,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/dist/index.css';
 import '../css/app.css';
 import '../css/admin-ui.css';
+import '../css/article-editor.css';
 
 createInertiaApp({
     title: title => `${title} · 精读英语`,

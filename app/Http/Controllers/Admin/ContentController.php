@@ -141,6 +141,8 @@ class ContentController extends Controller
             'paragraphs' => 'required|array|min:1',
             'paragraphs.*.sentences' => 'required|string|max:20000',
             'paragraphs.*.translation' => 'required|string|max:5000',
+            'paragraphs.*.sentenceTranslations' => 'sometimes|array',
+            'paragraphs.*.sentenceTranslations.*' => 'nullable|string|max:5000',
             'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
         ]);
@@ -148,7 +150,11 @@ class ContentController extends Controller
         foreach ($data['paragraphs'] as $paragraph) {
             $sentences = array_values(array_filter(array_map('trim', preg_split('/\R/u', $paragraph['sentences']) ?: []), fn (string $line): bool => $line !== ''));
             if ($sentences === []) return back()->withErrors(['paragraphs' => '每段至少需要一句英文'])->withInput();
-            $body[] = ['sentences' => $sentences, 'translation' => trim($paragraph['translation'])];
+            $sentenceTranslations = array_map(
+                fn (int $index): string => trim((string) ($paragraph['sentenceTranslations'][$index] ?? '')),
+                array_keys($sentences)
+            );
+            $body[] = ['sentences' => $sentences, 'translation' => trim($paragraph['translation']), 'sentenceTranslations' => $sentenceTranslations];
         }
 
         $existing = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first() : null;

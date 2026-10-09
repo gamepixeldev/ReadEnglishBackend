@@ -13,9 +13,9 @@ class SampleReadingSeeder extends Seeder
             $now = now();
 
             $body = [
-                ['sentences' => ['On a rainy afternoon, Lily found a blue umbrella beside the bus stop.', 'It was clean, and its handle had a little silver star.', 'Lily looked around, but nobody was there.'], 'translation' => '一个下雨的午后，莉莉在公交站旁发现了一把蓝色雨伞。伞很干净，伞柄上还有一颗小小的银色星星。莉莉四处看了看，但周围没有人。'],
-                ['sentences' => ['She carried the umbrella to the small bakery on the corner.', 'The baker smiled and said, “A girl left it here this morning.”', 'Just then, a wet girl ran inside. Lily handed her the umbrella.'], 'translation' => '她把伞带到街角的小面包店。面包师笑着说：“一个女孩今天早上把它落在这里了。”就在这时，一个浑身湿透的女孩跑进店里，莉莉把伞递给了她。'],
-                ['sentences' => ['“Thank you!” the girl said.', 'Lily felt warm, even though the rain was cold.', 'A small act of kindness can brighten someone’s day.'], 'translation' => '“谢谢你！”女孩说道。虽然雨很冷，莉莉心里却暖暖的。一个小小的善举，也能照亮别人的一天。'],
+                ['sentences' => ['On a rainy afternoon, Lily found a blue umbrella beside the bus stop.', 'It was clean, and its handle had a little silver star.', 'Lily looked around, but nobody was there.'], 'translation' => '一个下雨的午后，莉莉在公交站旁发现了一把蓝色雨伞。伞很干净，伞柄上还有一颗小小的银色星星。莉莉四处看了看，但周围没有人。', 'sentenceTranslations' => ['一个下雨的午后，莉莉在公交站旁发现了一把蓝色雨伞。', '伞很干净，伞柄上还有一颗小小的银色星星。', '莉莉四处看了看，但周围没有人。']],
+                ['sentences' => ['She carried the umbrella to the small bakery on the corner.', 'The baker smiled and said, “A girl left it here this morning.”', 'Just then, a wet girl ran inside. Lily handed her the umbrella.'], 'translation' => '她把伞带到街角的小面包店。面包师笑着说：“一个女孩今天早上把它落在这里了。”就在这时，一个浑身湿透的女孩跑进店里，莉莉把伞递给了她。', 'sentenceTranslations' => ['她把伞带到街角的小面包店。', '面包师笑着说：“一个女孩今天早上把它落在这里了。”', '就在这时，一个浑身湿透的女孩跑进店里，莉莉把伞递给了她。']],
+                ['sentences' => ['“Thank you!” the girl said.', 'Lily felt warm, even though the rain was cold.', 'A small act of kindness can brighten someone’s day.'], 'translation' => '“谢谢你！”女孩说道。虽然雨很冷，莉莉心里却暖暖的。一个小小的善举，也能照亮别人的一天。', 'sentenceTranslations' => ['“谢谢你！”女孩说道。', '虽然雨很冷，莉莉心里却暖暖的。', '一个小小的善举，也能照亮别人的一天。']],
             ];
 
             DB::table('reading_items')->updateOrInsert(['slug' => 'sample-blue-umbrella'], [
