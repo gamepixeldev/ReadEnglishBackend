@@ -583,24 +583,39 @@ class ContentController extends Controller
     {
         abort_unless($this->editableReadingItem($id), 404);
         $data = $request->validate([
-            'headword' => 'required|string|max:255', 'meaning' => 'required|string|max:255',
-            'ipa' => 'nullable|string|max:255', 'partOfSpeech' => 'nullable|string|max:64',
+            'headword' => 'required|string|max:255',
+            'meaning' => 'nullable|required_without:senses|string|max:255',
+            'ipa' => 'nullable|string|max:255',
+            'partOfSpeech' => 'nullable|string|max:64',
+            'senses' => 'sometimes|array|min:1|max:20',
+            'senses.*.partOfSpeech' => 'nullable|string|max:64',
+            'senses.*.meaning' => 'required|string|max:255',
         ]);
+        $senses = collect($data['senses'] ?? [[
+            'partOfSpeech' => $data['partOfSpeech'] ?? null,
+            'meaning' => $data['meaning'],
+        ]])->map(fn (array $sense): array => [
+            'part_of_speech' => trim((string) ($sense['partOfSpeech'] ?? '')) ?: null,
+            'meaning' => trim($sense['meaning']),
+        ])->values();
+        $meaningSummary = $senses->pluck('meaning')->filter()->implode('；');
+        $partOfSpeechSummary = $senses->pluck('part_of_speech')->filter()->unique()->implode(' / ');
+        if ($senses->isEmpty() || $senses->contains(fn (array $sense): bool => $sense['meaning'] === '')) {
+            return response()->json(['message' => '请为每条释义填写内容'], 422);
+        }
         $now = now();
-        $wordId = DB::transaction(function () use ($data, $id, $now): int {
+        $wordId = DB::transaction(function () use ($data, $id, $now, $senses, $meaningSummary, $partOfSpeechSummary): int {
             $wordId = DB::table('words')->insertGetId([
-                'headword' => trim($data['headword']), 'meaning' => trim($data['meaning']),
-                'ipa' => $data['ipa'] ?? null, 'part_of_speech' => $data['partOfSpeech'] ?? null,
+                'headword' => trim($data['headword']), 'meaning' => $senses->first()['meaning'],
+                'ipa' => $data['ipa'] ?? null, 'part_of_speech' => $partOfSpeechSummary ?: null,
                 'status' => 'draft', 'created_at' => $now, 'updated_at' => $now,
             ]);
             DB::table('word_details')->insert([
                 'word_id' => $wordId, 'type' => 'richtext', 'status' => 'draft',
                 'created_at' => $now, 'updated_at' => $now,
             ]);
-            DB::table('word_senses')->insert([
-                'word_id' => $wordId, 'part_of_speech' => $data['partOfSpeech'] ?? null,
-                'meaning' => trim($data['meaning']), 'sort_order' => 1,
-                'created_at' => $now, 'updated_at' => $now,
+            foreach ($senses as $index => $sense) DB::table('word_senses')->insert($sense + [
+                'word_id' => $wordId, 'sort_order' => $index + 1, 'created_at' => $now, 'updated_at' => $now,
             ]);
             $sortOrder = (int) DB::table('reading_words')->where('reading_item_id', $id)->max('sort_order') + 1;
             DB::table('reading_words')->insert([
@@ -612,7 +627,9 @@ class ContentController extends Controller
 
         return response()->json([
             'id' => $wordId, 'headword' => trim($data['headword']),
-            'meaning' => trim($data['meaning']), 'status' => 'draft',
+            'meaning' => $meaningSummary, 'senses' => $senses->map(fn (array $sense) => [
+                'partOfSpeech' => $sense['part_of_speech'], 'meaning' => $sense['meaning'],
+            ])->all(), 'status' => 'draft',
         ], 201);
     }
 
