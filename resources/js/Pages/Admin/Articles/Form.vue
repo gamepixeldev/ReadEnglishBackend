@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { Link, router, useForm } from '@inertiajs/vue3';
+import { ElMessage } from 'element-plus';
 import AdminLayout from '../../../Layouts/AdminLayout.vue';
 
 const props=defineProps({article:Object,selectedWords:Array,coverUrl:String,detailImageUrl:String,kind:{type:String,default:'article'},series:Object,nextChapterNo:{type:Number,default:1},readingLevels:{type:Array,default:()=>[]}});
@@ -21,12 +22,16 @@ const expandedQuestions=ref(questionForm.questions.map(q=>q.uiKey));
 let questionKeySequence=questionForm.questions.length;
 const analysisEditor=ref(null);const coverPreview=ref(props.coverUrl||'');const detailPreview=ref(props.detailImageUrl||'');
 const quick=ref({open:false,busy:false,error:'',headword:'',meaning:'',ipa:'',partOfSpeech:''});
+const saveAllBusy=ref(false);const saveAllStep=ref('');
 const letters='ABCDEFGH';
 watch(search,value=>{clearTimeout(timer);if(!value.trim()){results.value=[];return}timer=setTimeout(async()=>{searching.value=true;try{const res=await fetch(`${itemBase.value}/word-options?q=${encodeURIComponent(value)}`,{credentials:'same-origin',headers:{Accept:'application/json'}});const data=await res.json();results.value=res.ok?(data.items||[]):[]}finally{searching.value=false}},250)});
-function saveArticle(){articleForm.transform(data=>{const payload={...data,paragraphs:data.paragraphs.map(p=>({...p,sentences:Array.isArray(p.sentences)?p.sentences.join('\n'):p.sentences}))};if(!isChapter.value)delete payload.chapterNo;return payload}).submit(editing.value?'put':'post',isChapter.value?(editing.value?`/admin/series/${props.series.id}/chapters/${props.article.id}`:`/admin/series/${props.series.id}/chapters`):(editing.value?`/admin/articles/${props.article.id}`:'/admin/articles'),{forceFormData:true});}
-function saveAnalysis(){analysisForm.put(`${itemBase.value}/analysis`)}
-function syncWords(){wordForm.wordIds=selected.value.map(w=>w.id);wordForm.put(`${itemBase.value}/words`)}
-function saveQuestions(){questionForm.transform(data=>({questions:data.questions.map(({uiKey,...question})=>question)})).put(`${itemBase.value}/questions`)}
+function submitForm(form,method,url,options={}){return new Promise((resolve,reject)=>{let settled=false;form.submit(method,url,{...options,onSuccess:page=>{settled=true;resolve(page)},onError:errors=>{settled=true;reject(new Error(Object.values(errors||{}).flat()[0]||'请检查表单内容'))},onFinish:()=>{if(!settled)reject(new Error('请求未能完成，请检查网络后重试'))}})})}
+function withSaveError(request,label){return saveAllBusy.value?request:request.catch(error=>{ElMessage.error(`${label}保存失败：${error.message}`);return null})}
+function saveArticle(){articleForm.transform(data=>{const payload={...data,paragraphs:data.paragraphs.map(p=>({...p,sentences:Array.isArray(p.sentences)?p.sentences.join('\n'):p.sentences}))};if(!isChapter.value)delete payload.chapterNo;return payload});return withSaveError(submitForm(articleForm,editing.value?'put':'post',isChapter.value?(editing.value?`/admin/series/${props.series.id}/chapters/${props.article.id}`:`/admin/series/${props.series.id}/chapters`):(editing.value?`/admin/articles/${props.article.id}`:'/admin/articles'),{forceFormData:true}),isChapter.value?'章节':'文章')}
+function saveAnalysis(base=itemBase.value){return withSaveError(submitForm(analysisForm,'put',`${base}/analysis`),'语法解析')}
+function syncWords(base=itemBase.value){wordForm.wordIds=selected.value.map(w=>w.id);return withSaveError(submitForm(wordForm,'put',`${base}/words`),'重点词汇')}
+function saveQuestions(base=itemBase.value){questionForm.transform(data=>({questions:data.questions.map(({uiKey,...question})=>question)}));return withSaveError(submitForm(questionForm,'put',`${base}/questions`),'阅读理解题')}
+async function saveAll(){if(saveAllBusy.value)return;saveAllBusy.value=true;saveAllStep.value='保存正文';try{const page=await saveArticle();const savedId=page?.props?.article?.id||props.article?.id;if(!savedId)throw new Error('正文已提交，但未能获取文章编号，请刷新后重试');const base=isChapter.value?`/admin/chapters/${savedId}`:`/admin/articles/${savedId}`;const hasAnalysis=analysisForm.type==='richtext'?Boolean(analysisForm.html.trim()):Boolean(analysisForm.url.trim());if(hasAnalysis){saveAllStep.value='保存语法解析';await saveAnalysis(base)}saveAllStep.value='保存重点词汇';await syncWords(base);saveAllStep.value='保存阅读理解题';await saveQuestions(base);ElMessage.success('文章、解析、重点词汇和阅读理解题已全部保存')}catch(error){ElMessage.error(`保存未完成：${error.message}`)}finally{saveAllBusy.value=false;saveAllStep.value=''}}
 function addParagraph(){const index=articleForm.paragraphs.length;articleForm.paragraphs.push({sentences:'',translation:'',sentenceTranslations:[]});expandedParagraphs.value=[String(index)]}
 function removeParagraph(index){articleForm.paragraphs.splice(index,1);expandedParagraphs.value=expandedParagraphs.value.filter(name=>Number(name)!==index).map(name=>Number(name)>index?String(Number(name)-1):name)}
 function addQuestion(){const uiKey=`new-question-${questionKeySequence++}`;questionForm.questions.push({uiKey,id:null,questionType:'细节理解',kind:'choice',prompt:'',promptCn:'',options:'',answer:'A',explanation:''});expandedQuestions.value=[uiKey]}
@@ -63,7 +68,7 @@ function lettersFor(q){return letters.slice(0,Math.max(2,Math.min(8,questionOpti
     </template>
   </div><aside class="form-stack"><section class="card"><div class="card-header"><h2>编辑提示</h2></div><div class="card-body"><p class="helper">文章保存后默认为草稿。发布和下架操作在文章列表中进行。</p></div></section><section v-if="editing" class="card"><div class="card-header"><h2>文章信息</h2></div><div class="card-body"><div class="helper">ID：#{{article.id}}</div><div class="helper" style="margin-top:8px">最后更新：{{article.updated_at}}</div></div></section></aside></div>
   <el-dialog v-model="quick.open" title="添加单词" width="min(620px, 92vw)"><form class="form-stack" @submit.prevent="quickCreate"><p class="helper">新词先保存为草稿，可稍后补充详解。</p><div class="form-grid"><div class="form-field"><label>单词 *</label><el-input v-model="quick.headword" required /></div><div class="form-field"><label>释义 *</label><el-input v-model="quick.meaning" required /></div><div class="form-field"><label>音标</label><el-input v-model="quick.ipa" /></div><div class="form-field"><label>词性</label><el-input v-model="quick.partOfSpeech" /></div></div><el-alert v-if="quick.error" :title="quick.error" type="error" :closable="false"/><div class="section-actions"><el-button @click="quick.open=false">取消</el-button><el-button type="primary" native-type="submit" :loading="quick.busy">创建并添加到本文</el-button></div></form></el-dialog>
-  <el-button class="floating-save-button" type="primary" :loading="articleForm.processing" @click="saveArticle">{{articleForm.processing?'正在保存…':`保存${isChapter?'章节':'文章'}`}}</el-button>
+  <el-button class="floating-save-button" type="primary" :loading="saveAllBusy" :disabled="saveAllBusy" @click="saveAll">{{saveAllBusy?(saveAllStep+'…'):'保存全部'}}</el-button>
 </AdminLayout></template>
 
 <style scoped>
