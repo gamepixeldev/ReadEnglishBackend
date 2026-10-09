@@ -9,7 +9,8 @@ const filters = reactive({ q: props.search || '', status: props.status || '' })
 const planDialog = ref(false)
 const selectedWord = ref(null)
 const form = useForm({ planDate: '' })
-const planChoice = ref('__new__')
+const targetMode = ref('new')
+const selectedPlanDate = ref('')
 const alreadyScheduled = computed(() => selectedWord.value?.daily_plans?.some(plan => plan.date === form.planDate))
 
 function filter() { router.get('/admin/words', filters, { preserveState: true, replace: true }) }
@@ -23,13 +24,19 @@ function openPlanDialog(word) {
   selectedWord.value = word
   form.clearErrors()
   const todayPlan = props.availableDailyPlans?.find(plan => plan.plan_date === localDate())
-  planChoice.value = todayPlan ? todayPlan.plan_date : '__new__'
-  form.planDate = todayPlan?.plan_date || localDate()
+  targetMode.value = props.availableDailyPlans?.length ? 'existing' : 'new'
+  selectedPlanDate.value = todayPlan?.plan_date || props.availableDailyPlans?.[0]?.plan_date || ''
+  form.planDate = targetMode.value === 'existing' ? selectedPlanDate.value : localDate()
   planDialog.value = true
 }
-function changePlanChoice(value) {
-  planChoice.value = value
-  if (value !== '__new__') form.planDate = value
+function changeTargetMode(value) {
+  targetMode.value = value
+  if (value === 'existing') form.planDate = selectedPlanDate.value
+  else form.planDate = localDate()
+}
+function changeExistingPlan(date) {
+  selectedPlanDate.value = date
+  form.planDate = date
 }
 function addToPlan() {
   if (!selectedWord.value || alreadyScheduled.value) return
@@ -93,13 +100,18 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
     <el-dialog v-model="planDialog" title="加入每日单词计划" width="420px">
       <div class="plan-dialog-content">
         <div><span class="table-secondary">单词</span><strong>{{ selectedWord?.headword }}</strong></div>
-        <div class="form-field"><label>选择计划</label>
-          <el-select :model-value="planChoice" class="plan-select" @change="changePlanChoice">
+        <div class="form-field"><label>加入方式</label>
+          <el-radio-group :model-value="targetMode" @change="changeTargetMode">
+            <el-radio-button value="existing" :disabled="!availableDailyPlans?.length">选择已有计划</el-radio-button>
+            <el-radio-button value="new">新建计划</el-radio-button>
+          </el-radio-group>
+        </div>
+        <div v-if="targetMode === 'existing'" class="form-field"><label>选择计划</label>
+          <el-select :model-value="selectedPlanDate" class="plan-select" @change="changeExistingPlan">
             <el-option v-for="plan in availableDailyPlans" :key="plan.plan_date" :value="plan.plan_date" :label="`${plan.plan_date} · ${plan.status === 'published' ? '已发布' : '草稿'} · ${plan.word_count}个词`" />
-            <el-option label="＋ 新建其他日期的计划" value="__new__" />
           </el-select>
         </div>
-        <div v-if="planChoice === '__new__'" class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" :disabled-date="date => localDate(date) < localDate()" /></div>
+        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" :disabled-date="date => localDate(date) < localDate()" /></div>
         <el-alert v-if="alreadyScheduled" title="这个单词已经安排在该日计划中" type="success" :closable="false" />
         <el-alert v-else title="该日期没有计划时，会自动新建一个草稿计划；加入已有计划不会自动发布。" type="info" :closable="false" />
         <small v-if="form.errors.planDate || form.errors.dailyPlan" class="form-error">{{ form.errors.planDate || form.errors.dailyPlan }}</small>
