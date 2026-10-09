@@ -17,7 +17,6 @@ class StudyProgressController extends Controller
         $wordIds = DB::table('word_learning_events')->where('user_id', $userId)->distinct()->pluck('word_id');
         $favoriteIds = DB::table('word_favorites')->where('user_id', $userId)->pluck('word_id');
         $allWordIds = $wordIds->concat($favoriteIds)->unique()->values();
-        $wordNames = DB::table('words')->whereIn('id', $allWordIds)->pluck('headword', 'id');
         $wordSummaries = DB::table('words')->whereIn('id', $allWordIds)
             ->select('id', 'headword', 'part_of_speech', 'meaning')->get()
             ->mapWithKeys(fn ($word) => [$word->id => [
@@ -69,13 +68,15 @@ class StudyProgressController extends Controller
                 'readingKind' => $row->reading_kind,
                 'seriesId' => $row->series_id,
                 'chapterNo' => $row->chapter_no,
+                'puzzleTotal' => $row->category === 'puzzle'
+                    ? DB::table('puzzle_sentences')->where('puzzle_set_id', $row->target_id)->count()
+                    : null,
             ]);
 
         return response()->json([
             'readingIds' => $readingIds,
             'wordIds' => $wordIds,
             'favoriteWordIds' => $favoriteIds,
-            'wordNamesById' => $wordNames,
             'wordSummariesById' => $wordSummaries,
             'puzzles' => $puzzles,
             'dailyWordIdsByDate' => $daily,

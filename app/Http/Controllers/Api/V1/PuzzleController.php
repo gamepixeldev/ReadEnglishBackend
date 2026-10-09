@@ -50,6 +50,43 @@ class PuzzleController extends Controller
         return response()->json($this->summary($set) + ['sentences' => $sentences]);
     }
 
+    public function check(Request $request, int $id): JsonResponse
+    {
+        $input = $request->validate(['tokenIds' => ['required', 'array', 'min:1'], 'tokenIds.*' => ['required', 'integer']]);
+        $sentence = DB::table('puzzle_sentences as p')
+            ->join('puzzle_sets as s', 's.id', '=', 'p.puzzle_set_id')
+            ->where('p.id', $id)->where('s.status', 'published')->select('p.*')->first();
+        if (! $sentence) {
+            return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '句子不存在']], 404);
+        }
+        $answerIds = json_decode($sentence->answer_token_ids_json, true) ?: [];
+        $submitted = $input['tokenIds'];
+        $sortedSubmitted = $submitted;
+        $sortedAnswer = $answerIds;
+        sort($sortedSubmitted);
+        sort($sortedAnswer);
+        if (count($submitted) !== count($answerIds) || $sortedSubmitted !== $sortedAnswer) {
+            return response()->json(['error' => ['code' => 'INVALID_TOKENS', 'message' => '请使用全部词块']], 422);
+        }
+
+        return response()->json([
+            'correct' => $submitted === $answerIds,
+            'positions' => array_map(fn ($id, $index) => $id === $answerIds[$index], $submitted, array_keys($submitted)),
+        ]);
+    }
+
+    public function hint(int $id): JsonResponse
+    {
+        $sentence = DB::table('puzzle_sentences as p')
+            ->join('puzzle_sets as s', 's.id', '=', 'p.puzzle_set_id')
+            ->where('p.id', $id)->where('s.status', 'published')->select('p.answer_text')->first();
+        if (! $sentence) {
+            return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '句子不存在']], 404);
+        }
+
+        return response()->json(['answer' => $sentence->answer_text]);
+    }
+
     private function summary(object $set): array
     {
         return [
@@ -58,6 +95,7 @@ class PuzzleController extends Controller
             'subtitle' => $set->subtitle,
             'iconAsset' => $set->icon_asset,
             'sourceReadingItemId' => $set->source_reading_item_id,
+            'sentenceCount' => DB::table('puzzle_sentences')->where('puzzle_set_id', $set->id)->count(),
         ];
     }
 }

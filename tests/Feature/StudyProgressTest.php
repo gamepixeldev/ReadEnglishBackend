@@ -94,4 +94,29 @@ class StudyProgressTest extends TestCase
         $this->putJson($url, ['cursorNext' => 4], $headers)->assertUnprocessable();
         $this->putJson($url, ['cursorNext' => 0, 'reset' => true], $headers)->assertJsonPath('cursorNext', 0);
     }
+
+    public function test_daily_word_and_grammar_activity_appear_in_account_progress(): void
+    {
+        [, $headers] = $this->mobileSession();
+        $wordId = DB::table('words')->insertGetId([
+            'headword' => 'day', 'meaning' => '一天', 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $date = now('Asia/Shanghai')->toDateString();
+        $planId = DB::table('daily_word_plans')->insertGetId([
+            'plan_date' => $date, 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        DB::table('daily_word_plan_items')->insert(['plan_id' => $planId, 'word_id' => $wordId, 'sort_order' => 1]);
+        $this->postJson('/api/v1/me/word-learning-events', [
+            'wordId' => $wordId, 'sourceKind' => 'daily', 'planDate' => $date, 'requestId' => 'daily-1',
+        ], $headers)->assertOk();
+        $grammarId = DB::table('grammar_lessons')->insertGetId([
+            'title' => 'Past tense', 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->postJson('/api/v1/me/grammar-activity/'.$grammarId, [], $headers)->assertOk();
+        $this->getJson('/api/v1/me/study-progress', $headers)->assertJsonPath('dailyWordIdsByDate.'.$date.'.0', $wordId)
+            ->assertJsonFragment(['category' => 'grammar']);
+    }
 }

@@ -17,6 +17,10 @@
 4. 内容资源若存在图片、音频或上传文件，单独整理并迁移；SQL 导出文件不包含这些文件。
 5. 文章图片保存在 `storage/app/public/article-covers`（方形封面）和 `storage/app/public/article-detail-images`（详情横图），首次启动及部署后运行 `php artisan storage:link`；迁移数据库时也要迁移这些文件，并将生产 `APP_URL` 设为可访问的 HTTPS 后端地址。
 
+现有前端演示内容已经导出到 `database/data/study-fixtures.json`。在**需要这些测试内容的全新开发库**中先运行 `php artisan db:seed --class=SampleReadingSeeder`，再运行 `php artisan db:seed --class=LegacyStudyContentSeeder`。后一个导入器不会改写已存在的同名单词、课程或篇章；不要在已有正式内容的线上库中随意重复执行。今日单词在首次请求 `/api/v1/daily-words/today` 时由已发布词条生成当天计划；已有计划（包括后台准备的草稿）不会被自动覆盖。
+
+学习进度现在由登录用户的后端表提供。小程序本地只保存登录会话和资料页的提示偏好；旧的设备学习记录不合并到账号，首次启动会清理旧进度键。部署与测试时应以同一微信账号跨设备查看记录，并用另一账号验证隔离。
+
 ## 第一次上线（线上库为空时）
 
 1. 备份服务器现有站点与数据库，确认新项目使用独立站点目录、独立数据库和独立数据库账号。
