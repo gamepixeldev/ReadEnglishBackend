@@ -21,24 +21,19 @@ function localDate(date = new Date()) {
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
 }
-function nextFreePlanDate() {
-  const date = new Date()
-  while (existingPlanDates.value.has(localDate(date))) date.setDate(date.getDate() + 1)
-  return localDate(date)
-}
 function openPlanDialog(word) {
   selectedWord.value = word
   form.clearErrors()
   const todayPlan = props.availableDailyPlans?.find(plan => plan.plan_date === localDate())
   targetMode.value = props.availableDailyPlans?.length ? 'existing' : 'new'
   selectedPlanDate.value = todayPlan?.plan_date || props.availableDailyPlans?.[0]?.plan_date || ''
-  form.planDate = targetMode.value === 'existing' ? selectedPlanDate.value : nextFreePlanDate()
+  form.planDate = targetMode.value === 'existing' ? selectedPlanDate.value : ''
   planDialog.value = true
 }
 function changeTargetMode(value) {
   targetMode.value = value
   if (value === 'existing') form.planDate = selectedPlanDate.value
-  else form.planDate = nextFreePlanDate()
+  else form.planDate = ''
 }
 function changeExistingPlan(date) {
   selectedPlanDate.value = date
@@ -107,17 +102,17 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
       <div class="plan-dialog-content">
         <div><span class="table-secondary">单词</span><strong>{{ selectedWord?.headword }}</strong></div>
         <div class="form-field"><label>加入方式</label>
-          <el-radio-group :model-value="targetMode" @change="changeTargetMode">
-            <el-radio-button value="existing" :disabled="!availableDailyPlans?.length">选择已有计划</el-radio-button>
-            <el-radio-button value="new">新建计划</el-radio-button>
-          </el-radio-group>
+          <div class="mode-switch">
+            <el-button :type="targetMode === 'existing' ? 'primary' : 'default'" :disabled="!availableDailyPlans?.length" @click="changeTargetMode('existing')">选择已有计划</el-button>
+            <el-button :type="targetMode === 'new' ? 'primary' : 'default'" @click="changeTargetMode('new')">新建计划</el-button>
+          </div>
         </div>
         <div v-if="targetMode === 'existing'" class="form-field"><label>选择计划</label>
           <el-select :model-value="selectedPlanDate" class="plan-select" @change="changeExistingPlan">
             <el-option v-for="plan in availableDailyPlans" :key="plan.plan_date" :value="plan.plan_date" :label="`${plan.plan_date} · ${plan.status === 'published' ? '已发布' : '草稿'} · ${plan.word_count}个词`" />
           </el-select>
         </div>
-        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" :disabled-date="date => localDate(date) < localDate() || existingPlanDates.has(localDate(date))" /></div>
+        <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" placeholder="请选择新计划日期" :disabled-date="date => localDate(date) < localDate() || existingPlanDates.has(localDate(date))" /></div>
         <el-alert v-if="alreadyScheduled" title="这个单词已经安排在该日计划中" type="success" :closable="false" />
         <el-alert v-else title="同一个单词可安排在不同日期复习；仅不能重复加入同一天。新词加入后按未完成处理。新日期会建立草稿计划。" type="info" :closable="false" />
         <small v-if="form.errors.planDate || form.errors.dailyPlan" class="form-error">{{ form.errors.planDate || form.errors.dailyPlan }}</small>
@@ -128,5 +123,5 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
 </template>
 
 <style scoped>
-.plan-tags,.row-actions{display:flex;align-items:center;gap:7px}.plan-dialog-content{display:grid;gap:18px}.plan-dialog-content>div:first-child{display:flex;align-items:center;gap:12px}.plan-dialog-content .el-date-editor,.plan-select{width:100%}
+.plan-tags,.row-actions{display:flex;align-items:center;gap:7px}.plan-dialog-content{display:grid;gap:18px}.plan-dialog-content>div:first-child{display:flex;align-items:center;gap:12px}.plan-dialog-content .el-date-editor,.plan-select{width:100%}.mode-switch{display:flex;gap:8px}
 </style>
