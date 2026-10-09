@@ -113,7 +113,7 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
         </div>
         <div v-else class="form-field"><label>新计划日期</label><el-date-picker v-model="form.planDate" type="date" value-format="YYYY-MM-DD" format="YYYY年MM月DD日" :disabled-date="date => localDate(date) < localDate()" /></div>
         <el-alert v-if="alreadyScheduled" title="这个单词已经安排在该日计划中" type="success" :closable="false" />
-        <el-alert v-else title="该日期没有计划时，会自动新建一个草稿计划；加入已有计划不会自动发布。" type="info" :closable="false" />
+        <el-alert v-else title="同一个单词可安排在不同日期复习；仅不能重复加入同一天。新词加入后按未完成处理。新日期会建立草稿计划。" type="info" :closable="false" />
         <small v-if="form.errors.planDate || form.errors.dailyPlan" class="form-error">{{ form.errors.planDate || form.errors.dailyPlan }}</small>
       </div>
       <template #footer><el-button @click="planDialog = false">取消</el-button><el-button type="primary" :loading="form.processing" :disabled="alreadyScheduled || !form.planDate" @click="addToPlan">确认加入</el-button></template>

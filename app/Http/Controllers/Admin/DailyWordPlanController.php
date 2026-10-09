@@ -90,9 +90,6 @@ class DailyWordPlanController extends Controller
             if (DB::table('daily_word_plan_items')->where('plan_id', $plan->id)->where('word_id', $wordId)->exists()) {
                 return ['message' => '这个单词已在该日期计划中', 'created' => false];
             }
-            if (DB::table('daily_word_completions')->where('plan_id', $plan->id)->exists()) {
-                return ['error' => '该计划已有用户完成记录，不能再添加单词'];
-            }
             $count = DB::table('daily_word_plan_items')->where('plan_id', $plan->id)->count();
             if ($count >= 30) return ['error' => '每日计划最多安排 30 个单词'];
 
