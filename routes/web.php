@@ -26,6 +26,8 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
 
     Route::post('/articles', [ContentController::class, 'saveArticle'])->name('admin.article.create');
     Route::put('/articles/{id}', [ContentController::class, 'saveArticle'])->whereNumber('id')->name('admin.article.update');
+    Route::get('/articles/{id}/word-options', [ContentController::class, 'searchArticleWords'])->whereNumber('id')->name('admin.article.word-options');
+    Route::post('/articles/{id}/words/new', [ContentController::class, 'createArticleWord'])->whereNumber('id')->name('admin.article.word-create');
     Route::put('/articles/{id}/analysis', [ContentController::class, 'saveAnalysis'])->whereNumber('id')->name('admin.article.analysis');
     Route::put('/articles/{id}/words', [ContentController::class, 'saveReadingWords'])->whereNumber('id')->name('admin.article.words');
     Route::post('/articles/{id}/publish', [ContentController::class, 'publishArticle'])->whereNumber('id')->name('admin.article.publish');

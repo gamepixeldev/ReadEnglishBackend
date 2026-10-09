@@ -9,3 +9,31 @@
 .cover-upload-controls input{max-width:100%;font-size:13px}
 .cover-upload-controls .form-hint{margin:9px 0 0;font-size:12px;line-height:1.6;color:#8290a4}
 @media(max-width:900px){.article-images{grid-template-columns:1fr}}
+.required-mark{color:#d63f45;font-size:17px;font-weight:800;line-height:1;margin-left:2px}
+.form-hint{color:#78869a;font-size:12px;line-height:1.6;margin:7px 0 0}
+.paragraph-add{display:flex;justify-content:flex-start;padding:14px 0 3px}
+.inline-action{display:inline-block;margin-left:8px}
+.picker-tools{display:flex;gap:10px;align-items:center;margin:10px 0}
+.picker-tools .picker-search{flex:1;margin:0}
+.selected-words{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+.selected-word{display:inline-flex;align-items:center;gap:9px;border:1px solid #dfe6f1;border-radius:7px;background:#f8faff;padding:7px 9px;color:#344157;font-size:13px}
+.selected-word small{color:#8793a4;margin-left:4px}
+.selected-word em,.word-option em{font-style:normal;color:#b17b2d;font-size:11px;background:#fff4dd;border-radius:4px;padding:2px 5px;margin-left:5px}
+.selected-word button{border:0;background:none;color:#8190a4;font-size:17px;line-height:1;padding:0 2px}
+.word-option{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.word-option>span{min-width:0;flex:1}
+.word-option .btn{flex:none}
+.draft-word-hint{color:#946926;margin-bottom:10px}
+.format-switch{display:flex;gap:5px;margin:9px 0 10px}
+.format-option{border:1px solid #dce2eb;border-radius:6px;background:#fff;color:#526176;padding:7px 13px}
+.format-option.active{border-color:#4568e9;background:#eef2ff;color:#3654d5;font-weight:650}
+.markdown-editor{width:100%;min-height:340px;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap}
+.word-dialog{width:min(620px,calc(100% - 32px));border:1px solid #e1e6ef;border-radius:12px;padding:24px;box-shadow:0 20px 70px #14233b33}
+.word-dialog::backdrop{background:#14233b77}
+.word-dialog form{display:grid;gap:16px}
+.dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.dialog-head h3{margin:0;font-size:18px}
+.dialog-head p{margin:5px 0 0;color:#8390a2;font-size:12px}
+.dialog-close{border:0;background:none;color:#77849a;font-size:23px;line-height:1}
+.dialog-error{margin:0;padding:10px 12px;border-radius:6px;background:#fff2f1;color:#ad3d40;font-size:13px}
+@media(max-width:600px){.picker-tools{align-items:stretch;flex-direction:column}.picker-tools .btn{align-self:flex-start}.word-dialog{padding:18px}}

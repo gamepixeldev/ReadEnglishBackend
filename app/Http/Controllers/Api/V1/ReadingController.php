@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\HtmlContentSanitizer;
 use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -90,7 +91,7 @@ class ReadingController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function grammarAnalysis(int $id): JsonResponse
+    public function grammarAnalysis(int $id, HtmlContentSanitizer $sanitizer): JsonResponse
     {
         $item = $this->publishedReading($id);
         if (! $item) {
@@ -105,7 +106,12 @@ class ReadingController extends Controller
 
         return response()->json([
             'type' => $source->type,
-            'html' => $source->type === 'richtext' ? $source->html : null,
+            'html' => $source->type === 'richtext'
+                ? (($source->format ?? 'html') === 'markdown'
+                    ? $sanitizer->clean(\Illuminate\Support\Str::markdown($source->html ?? ''))
+                    : $source->html)
+                : null,
+            'format' => $source->format ?? 'html',
             'url' => $source->type === 'officialAccount' ? $source->url : null,
             'title' => $source->title,
             'summary' => $source->summary,

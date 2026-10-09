@@ -9,6 +9,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -68,7 +69,9 @@ class ContentController extends Controller
         if ($article) {
             $article->body = json_decode($article->body_json, true) ?: [];
             $article->analysis = DB::table('reading_analyses')->where('reading_item_id', $id)->first();
-            if ($article->analysis?->type === 'richtext') $article->analysis->html = $sanitizer->clean($article->analysis->html ?? '');
+            if ($article->analysis?->type === 'richtext' && ($article->analysis->format ?? 'html') === 'html') {
+                $article->analysis->html = $sanitizer->clean($article->analysis->html ?? '');
+            }
             $article->wordIds = DB::table('reading_words')->where('reading_item_id', $id)->orderBy('sort_order')->pluck('word_id')->map(fn ($id): int => (int) $id)->all();
         }
 
@@ -76,7 +79,10 @@ class ContentController extends Controller
             'article' => $article,
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
-            'words' => DB::table('words')->orderBy('headword')->get(),
+            'selectedWords' => $article
+                ? DB::table('words')->whereIn('id', $article->wordIds)->get()
+                    ->sortBy(fn ($word) => array_search((int) $word->id, $article->wordIds, true))->values()
+                : collect(),
         ]);
     }
 
@@ -128,7 +134,8 @@ class ContentController extends Controller
             'paragraphs' => 'required|array|min:1',
             'paragraphs.*.sentences' => 'required|string|max:20000',
             'paragraphs.*.translation' => 'required|string|max:5000',
-            'rightsType' => 'nullable|string|max:32', 'rightsNote' => 'nullable|string|max:10000',
+            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsNote' => 'nullable|string|max:10000',
         ]);
         $body = [];
         foreach ($data['paragraphs'] as $paragraph) {
@@ -178,11 +185,16 @@ class ContentController extends Controller
         abort_unless($article, 404);
         $data = $request->validate([
             'type' => 'required|in:richtext,officialAccount',
+            'format' => 'required|in:html,markdown',
             'html' => 'required_if:type,richtext|nullable|string|max:1000000',
             'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
             'title' => 'nullable|string|max:255', 'summary' => 'nullable|string|max:10000',
         ]);
-        $html = $data['type'] === 'richtext' ? $sanitizer->clean($data['html'] ?? '') : null;
+        $source = $data['html'] ?? '';
+        $format = $data['type'] === 'richtext' ? $data['format'] : 'html';
+        $html = $data['type'] === 'richtext'
+            ? ($format === 'markdown' ? $sanitizer->clean(Str::markdown($source)) : $sanitizer->clean($source))
+            : null;
         if ($data['type'] === 'richtext' && trim(strip_tags((string) $html)) === '') {
             return back()->withErrors(['html' => '清理后没有可显示的正文内容'])->withInput();
         }
@@ -190,7 +202,9 @@ class ContentController extends Controller
         $now = now();
         $exists = DB::table('reading_analyses')->where('reading_item_id', $id)->exists();
         DB::table('reading_analyses')->updateOrInsert(['reading_item_id' => $id], [
-            'type' => $data['type'], 'html' => $html, 'url' => $data['url'] ?? null,
+            'type' => $data['type'], 'format' => $format,
+            'html' => $data['type'] === 'richtext' && $format === 'markdown' ? $source : $html,
+            'url' => $data['url'] ?? null,
             'title' => $data['title'] ?? null, 'summary' => $data['summary'] ?? null,
             'status' => $article->status === 'published' ? 'published' : 'draft', 'updated_at' => $now,
         ] + ($exists ? [] : ['created_at' => $now]));
@@ -229,7 +243,7 @@ class ContentController extends Controller
             DB::table('reading_items')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
             DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'published', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已发布');
+        return redirect()->route('admin.articles.index')->with('success', '文章已发布');
     }
 
     public function unpublishArticle(int $id): RedirectResponse
@@ -239,7 +253,51 @@ class ContentController extends Controller
             DB::table('reading_items')->where('id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
             DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
         });
-        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已下架');
+        return redirect()->route('admin.articles.index')->with('success', '文章已下架');
+    }
+
+    public function searchArticleWords(Request $request, int $id): \Illuminate\Http\JsonResponse
+    {
+        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        $data = $request->validate(['q' => 'required|string|min:1|max:100']);
+        $query = trim($data['q']);
+        $items = DB::table('words')->where(function ($words) use ($query): void {
+            $words->where('headword', 'like', '%'.$query.'%')->orWhere('meaning', 'like', '%'.$query.'%');
+        })->orderBy('headword')->limit(20)->get(['id', 'headword', 'meaning', 'status']);
+
+        return response()->json(['items' => $items]);
+    }
+
+    public function createArticleWord(Request $request, int $id): \Illuminate\Http\JsonResponse
+    {
+        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        $data = $request->validate([
+            'headword' => 'required|string|max:255', 'meaning' => 'required|string|max:255',
+            'ipa' => 'nullable|string|max:255', 'partOfSpeech' => 'nullable|string|max:64',
+        ]);
+        $now = now();
+        $wordId = DB::transaction(function () use ($data, $id, $now): int {
+            $wordId = DB::table('words')->insertGetId([
+                'headword' => trim($data['headword']), 'meaning' => trim($data['meaning']),
+                'ipa' => $data['ipa'] ?? null, 'part_of_speech' => $data['partOfSpeech'] ?? null,
+                'status' => 'draft', 'created_at' => $now, 'updated_at' => $now,
+            ]);
+            DB::table('word_details')->insert([
+                'word_id' => $wordId, 'type' => 'richtext', 'status' => 'draft',
+                'created_at' => $now, 'updated_at' => $now,
+            ]);
+            $sortOrder = (int) DB::table('reading_words')->where('reading_item_id', $id)->max('sort_order') + 1;
+            DB::table('reading_words')->insert([
+                'reading_item_id' => $id, 'word_id' => $wordId, 'sort_order' => $sortOrder,
+            ]);
+
+            return $wordId;
+        });
+
+        return response()->json([
+            'id' => $wordId, 'headword' => trim($data['headword']),
+            'meaning' => trim($data['meaning']), 'status' => 'draft',
+        ], 201);
     }
 
     public function saveWord(Request $request, HtmlContentSanitizer $sanitizer, ?int $id = null): RedirectResponse

@@ -50,7 +50,7 @@ class ContentAdminController extends Controller
             'body.*.sentences' => 'required|array|min:1',
             'body.*.sentences.*' => 'required|string|max:5000',
             'body.*.translation' => 'required|string|max:5000',
-            'rightsType' => 'nullable|string|max:32',
+            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'nullable|string|max:10000',
             'sortOrder' => 'sometimes|integer|min:0|max:4294967295',
         ]);
@@ -91,7 +91,7 @@ class ContentAdminController extends Controller
             'body.*.sentences' => 'required_with:body|array|min:1',
             'body.*.sentences.*' => 'required_with:body|string|max:5000',
             'body.*.translation' => 'required_with:body|string|max:5000',
-            'rightsType' => 'sometimes|nullable|string|max:32',
+            'rightsType' => ['sometimes', 'nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
             'rightsNote' => 'sometimes|nullable|string|max:10000',
             'sortOrder' => 'sometimes|integer|min:0|max:4294967295',
         ]);
@@ -141,7 +141,7 @@ class ContentAdminController extends Controller
             'rightsType' => $reading->rights_type,
             'rightsNote' => $reading->rights_note,
             'analysis' => $analysis ? [
-                'id' => (int) $analysis->id, 'type' => $analysis->type, 'html' => $analysis->html,
+                'id' => (int) $analysis->id, 'type' => $analysis->type, 'format' => $analysis->format ?? 'html', 'html' => $analysis->html,
                 'url' => $analysis->url, 'title' => $analysis->title, 'summary' => $analysis->summary,
                 'status' => $analysis->status,
             ] : null,
@@ -156,12 +156,21 @@ class ContentAdminController extends Controller
         if (! DB::table('reading_items')->where('id', $id)->exists()) return $this->notFound();
         $data = $request->validate([
             'type' => 'required|in:richtext,officialAccount',
+            'format' => 'sometimes|in:html,markdown',
             'html' => 'required_if:type,richtext|nullable|string|max:1000000',
             'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
             'title' => 'nullable|string|max:255',
             'summary' => 'nullable|string|max:10000',
         ]);
-        if ($data['type'] === 'richtext') $data['html'] = app(HtmlContentSanitizer::class)->clean($data['html'] ?? '');
+        $format = $data['format'] ?? 'html';
+        if ($data['type'] !== 'richtext') $format = 'html';
+        $sourceContent = $data['html'] ?? '';
+        if ($data['type'] === 'richtext') {
+            $sanitizer = app(HtmlContentSanitizer::class);
+            $data['html'] = $format === 'markdown'
+                ? $sanitizer->clean(\Illuminate\Support\Str::markdown($sourceContent))
+                : $sanitizer->clean($sourceContent);
+        }
         if ($data['type'] === 'richtext' && trim(strip_tags($data['html'])) === '') {
             return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '富文本清理后没有可显示的内容']], 422);
         }
@@ -169,7 +178,9 @@ class ContentAdminController extends Controller
         $now = now();
         $analysisStatus = DB::table('reading_items')->where('id', $id)->value('status') === 'published' ? 'published' : 'draft';
         DB::table('reading_analyses')->updateOrInsert(['reading_item_id' => $id], [
-            'type' => $data['type'], 'html' => $data['html'] ?? null, 'url' => $data['url'] ?? null,
+            'type' => $data['type'], 'format' => $format,
+            'html' => $data['type'] === 'richtext' && $format === 'markdown' ? $sourceContent : ($data['html'] ?? null),
+            'url' => $data['url'] ?? null,
             'title' => $data['title'] ?? null, 'summary' => $data['summary'] ?? null,
             'status' => $analysisStatus, 'updated_at' => $now,
         ] + (DB::table('reading_analyses')->where('reading_item_id', $id)->exists() ? [] : ['created_at' => $now]));

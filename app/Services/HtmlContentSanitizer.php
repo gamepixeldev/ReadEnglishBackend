@@ -4,7 +4,7 @@ namespace App\Services;
 
 class HtmlContentSanitizer
 {
-    private const ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'a', 'span', 'div', 'hr', 'sup', 'sub'];
+    private const ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 'u', 's', 'del', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'blockquote', 'a', 'span', 'div', 'hr', 'sup', 'sub', 'code', 'pre', 'table', 'thead', 'tbody', 'tr', 'th', 'td'];
 
     public function clean(string $html): string
     {
