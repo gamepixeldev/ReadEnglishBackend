@@ -63,4 +63,27 @@ function lettersFor(q){return letters.slice(0,Math.max(2,Math.min(8,questionOpti
     </template>
   </div><aside class="form-stack"><section class="card"><div class="card-header"><h2>编辑提示</h2></div><div class="card-body"><p class="helper">文章保存后默认为草稿。发布和下架操作在文章列表中进行。</p></div></section><section v-if="editing" class="card"><div class="card-header"><h2>文章信息</h2></div><div class="card-body"><div class="helper">ID：#{{article.id}}</div><div class="helper" style="margin-top:8px">最后更新：{{article.updated_at}}</div></div></section></aside></div>
   <el-dialog v-model="quick.open" title="添加单词" width="min(620px, 92vw)"><form class="form-stack" @submit.prevent="quickCreate"><p class="helper">新词先保存为草稿，可稍后补充详解。</p><div class="form-grid"><div class="form-field"><label>单词 *</label><el-input v-model="quick.headword" required /></div><div class="form-field"><label>释义 *</label><el-input v-model="quick.meaning" required /></div><div class="form-field"><label>音标</label><el-input v-model="quick.ipa" /></div><div class="form-field"><label>词性</label><el-input v-model="quick.partOfSpeech" /></div></div><el-alert v-if="quick.error" :title="quick.error" type="error" :closable="false"/><div class="section-actions"><el-button @click="quick.open=false">取消</el-button><el-button type="primary" native-type="submit" :loading="quick.busy">创建并添加到本文</el-button></div></form></el-dialog>
+  <el-button class="floating-save-button" type="primary" :loading="articleForm.processing" @click="saveArticle">{{articleForm.processing?'正在保存…':`保存${isChapter?'章节':'文章'}`}}</el-button>
 </AdminLayout></template>
+
+<style scoped>
+.floating-save-button {
+  position: fixed;
+  right: 32px;
+  bottom: 28px;
+  z-index: 1000;
+  min-width: 132px;
+  height: 48px;
+  border-radius: 24px;
+  box-shadow: 0 8px 24px rgb(35 73 135 / 24%);
+}
+
+@media (max-width: 640px) {
+  .floating-save-button {
+    right: 16px;
+    bottom: 16px;
+    min-width: 116px;
+    height: 44px;
+  }
+}
+</style>
