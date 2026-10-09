@@ -27,6 +27,7 @@ function closeSidebar() { document.body.classList.remove('sidebar-open'); }
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Puzzles')}" href="/admin/puzzles"><span class="nav-icon">拼</span>拼句内容</Link>
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/DailyWords')}" href="/admin/daily-words"><span class="nav-icon">日</span>每日单词</Link>
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/ReadingLevels')}" href="/admin/reading-levels"><span class="nav-icon">≡</span>阅读级别</Link>
+        <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/GrammarLevels')}" href="/admin/grammar-levels"><span class="nav-icon">≡</span>语法级别</Link>
       </nav>
       <div class="nav-section">账号</div>
       <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component === 'Admin/Password'}" href="/admin/password"><span class="nav-icon">⚙</span>修改密码</Link></nav>

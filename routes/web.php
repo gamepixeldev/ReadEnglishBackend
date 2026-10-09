@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\ReadingLevelController;
 use App\Http\Controllers\Admin\GrammarLessonController;
+use App\Http\Controllers\Admin\GrammarLevelController;
 use App\Http\Controllers\Admin\PuzzleSetController;
 use App\Http\Controllers\Admin\DailyWordPlanController;
 
@@ -33,6 +34,10 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::post('/grammar', [GrammarLessonController::class, 'save'])->name('admin.grammar.store');
     Route::put('/grammar/{id}', [GrammarLessonController::class, 'save'])->whereNumber('id')->name('admin.grammar.update');
     Route::post('/grammar/{id}/toggle', [GrammarLessonController::class, 'toggle'])->whereNumber('id')->name('admin.grammar.toggle');
+    Route::get('/grammar-levels', [GrammarLevelController::class, 'index'])->name('admin.grammar-levels.index');
+    Route::post('/grammar-levels', [GrammarLevelController::class, 'store'])->name('admin.grammar-levels.store');
+    Route::post('/grammar-levels/{id}/toggle', [GrammarLevelController::class, 'toggle'])->whereNumber('id')->name('admin.grammar-levels.toggle');
+    Route::post('/grammar-levels/{id}/move/{direction}', [GrammarLevelController::class, 'move'])->whereNumber('id')->name('admin.grammar-levels.move');
     Route::get('/puzzles', [PuzzleSetController::class, 'index'])->name('admin.puzzles.index');
     Route::get('/puzzles/create', [PuzzleSetController::class, 'form'])->name('admin.puzzles.create');
     Route::get('/puzzles/reading-options', [PuzzleSetController::class, 'readingOptions'])->name('admin.puzzles.reading-options');

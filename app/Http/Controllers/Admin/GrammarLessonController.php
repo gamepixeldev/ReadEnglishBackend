@@ -7,6 +7,7 @@ use App\Services\HtmlContentSanitizer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -42,17 +43,26 @@ class GrammarLessonController extends Controller
                 'explanation' => $row->explanation,
             ]) : collect();
 
-        return Inertia::render('Admin/Grammar/Form', compact('lesson', 'content', 'questions'));
+        if ($content?->type === 'richtext' && ($content->format ?? 'html') === 'html') {
+            $content->html = app(HtmlContentSanitizer::class)->clean($content->html ?? '');
+        }
+        $levels = DB::table('grammar_levels')->orderBy('sort_order')->orderBy('id')->get(['name', 'is_active']);
+
+        return Inertia::render('Admin/Grammar/Form', compact('lesson', 'content', 'questions', 'levels'));
     }
 
     public function save(Request $request, HtmlContentSanitizer $sanitizer, ?int $id = null): RedirectResponse
     {
+        $currentLevel = $id ? DB::table('grammar_lessons')->where('id', $id)->value('level') : null;
+        $levelRule = Rule::exists('grammar_levels', 'name');
+        if ($request->input('level') !== $currentLevel) $levelRule->where('is_active', true);
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'summary' => 'nullable|string|max:10000',
-            'level' => 'nullable|string|max:32',
+            'level' => ['required', 'string', 'max:32', $levelRule],
             'sortOrder' => 'nullable|integer|min:0|max:4294967295',
             'contentType' => ['required', Rule::in(['richtext', 'officialAccount'])],
+            'contentFormat' => ['sometimes', Rule::in(['html', 'markdown'])],
             'contentHtml' => 'required_if:contentType,richtext|nullable|string|max:1000000',
             'contentUrl' => 'required_if:contentType,officialAccount|nullable|url|max:2048',
             'contentTitle' => 'nullable|string|max:255',
@@ -65,10 +75,13 @@ class GrammarLessonController extends Controller
             'questions.*.answer' => 'required',
             'questions.*.explanation' => 'nullable|string|max:10000',
         ]);
-        $html = $data['contentType'] === 'richtext' ? $sanitizer->clean($data['contentHtml'] ?? '') : null;
-        if ($data['contentType'] === 'richtext' && trim(strip_tags((string) $html)) === '') {
+        $source = $data['contentHtml'] ?? '';
+        $format = $data['contentType'] === 'richtext' ? ($data['contentFormat'] ?? 'html') : 'html';
+        $rendered = $data['contentType'] === 'richtext' ? $sanitizer->clean($format === 'markdown' ? Str::markdown($source) : $source) : null;
+        if ($data['contentType'] === 'richtext' && trim(strip_tags((string) $rendered)) === '') {
             return back()->withErrors(['contentHtml' => '请填写可显示的语法正文'])->withInput();
         }
+        $html = $format === 'markdown' ? $source : $rendered;
         foreach ($data['questions'] as $index => $question) {
             if ($question['kind'] === 'choice') {
                 $options = array_values(array_map('trim', $question['options'] ?? []));
@@ -83,11 +96,11 @@ class GrammarLessonController extends Controller
         }
         if ($id) abort_unless(DB::table('grammar_lessons')->where('id', $id)->exists(), 404);
 
-        DB::transaction(function () use ($data, $html, &$id): void {
+        DB::transaction(function () use ($data, $html, $format, &$id): void {
             $now = now();
             $row = [
                 'title' => trim($data['title']), 'summary' => $data['summary'] ?? null,
-                'level' => $data['level'] ?? null, 'sort_order' => $data['sortOrder'] ?? 0,
+                'level' => $data['level'], 'sort_order' => $data['sortOrder'] ?? 0,
                 'updated_at' => $now,
             ];
             if ($id) DB::table('grammar_lessons')->where('id', $id)->update($row);
@@ -96,7 +109,7 @@ class GrammarLessonController extends Controller
             $currentStatus = DB::table('grammar_lessons')->where('id', $id)->value('status');
             $hasContent = DB::table('grammar_lesson_contents')->where('grammar_lesson_id', $id)->exists();
             DB::table('grammar_lesson_contents')->updateOrInsert(['grammar_lesson_id' => $id], [
-                'type' => $data['contentType'], 'html' => $html,
+                'type' => $data['contentType'], 'format' => $format, 'html' => $html,
                 'url' => $data['contentType'] === 'officialAccount' ? $data['contentUrl'] : null,
                 'title' => $data['contentTitle'] ?? null, 'summary' => $data['contentSummary'] ?? null,
                 'status' => $currentStatus, 'updated_at' => $now,

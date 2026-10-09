@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\HtmlContentSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class GrammarController extends Controller
 {
@@ -34,7 +36,7 @@ class GrammarController extends Controller
         ]);
     }
 
-    public function show(int $id): JsonResponse
+    public function show(int $id, HtmlContentSanitizer $sanitizer): JsonResponse
     {
         $lesson = DB::table('grammar_lessons')->where('id', $id)->where('status', 'published')->first();
         if (! $lesson) {
@@ -51,7 +53,7 @@ class GrammarController extends Controller
             'level' => $lesson->level,
             'contentSource' => $content ? [
                 'type' => $content->type,
-                'html' => $content->type === 'richtext' ? $content->html : null,
+                'html' => $content->type === 'richtext' ? $sanitizer->clean(($content->format ?? 'html') === 'markdown' ? Str::markdown($content->html ?? '') : $content->html) : null,
                 'url' => $content->type === 'officialAccount' ? $content->url : null,
                 'title' => $content->title,
                 'summary' => $content->summary,

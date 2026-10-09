@@ -305,7 +305,7 @@ class ContentController extends Controller
         if ($id) abort_unless($word, 404);
         if ($word) {
             $word->detail = DB::table('word_details')->where('word_id', $id)->first();
-            if ($word->detail?->type === 'richtext') $word->detail->html = $sanitizer->clean($word->detail->html ?? '');
+            if ($word->detail?->type === 'richtext' && ($word->detail->format ?? 'html') === 'html') $word->detail->html = $sanitizer->clean($word->detail->html ?? '');
         }
 
         return Inertia::render('Admin/Words/Form', compact('word'));
@@ -604,14 +604,18 @@ class ContentController extends Controller
             'partOfSpeech' => 'nullable|string|max:64', 'meaning' => 'required|string|max:255',
             'frequencyLabel' => 'nullable|string|max:255', 'audioAsset' => 'nullable|string|max:255',
             'detailType' => 'required|in:richtext,officialAccount',
+            'detailFormat' => 'sometimes|in:html,markdown',
             'detailHtml' => 'required_if:detailType,richtext|nullable|string|max:1000000',
             'detailUrl' => 'required_if:detailType,officialAccount|nullable|url|max:2048',
             'detailTitle' => 'nullable|string|max:255', 'detailSummary' => 'nullable|string|max:10000',
         ]);
-        $html = $data['detailType'] === 'richtext' ? $sanitizer->clean($data['detailHtml'] ?? '') : null;
-        if ($data['detailType'] === 'richtext' && trim(strip_tags((string) $html)) === '') {
+        $source = $data['detailHtml'] ?? '';
+        $format = $data['detailType'] === 'richtext' ? ($data['detailFormat'] ?? 'html') : 'html';
+        $rendered = $data['detailType'] === 'richtext' ? $sanitizer->clean($format === 'markdown' ? Str::markdown($source) : $source) : null;
+        if ($data['detailType'] === 'richtext' && trim(strip_tags((string) $rendered)) === '') {
             return back()->withErrors(['detailHtml' => '清理后没有可显示的详解正文'])->withInput();
         }
+        $html = $format === 'markdown' ? $source : $rendered;
 
         $wordRow = [
             'slug' => $data['slug'] ?? null, 'headword' => $data['headword'], 'ipa' => $data['ipa'] ?? null,
@@ -632,7 +636,7 @@ class ContentController extends Controller
         $now = now();
         $hasDetail = DB::table('word_details')->where('word_id', $id)->exists();
         DB::table('word_details')->updateOrInsert(['word_id' => $id], [
-            'type' => $data['detailType'], 'html' => $html, 'url' => $data['detailUrl'] ?? null,
+            'type' => $data['detailType'], 'format' => $format, 'html' => $html, 'url' => $data['detailUrl'] ?? null,
             'title' => $data['detailTitle'] ?? null, 'summary' => $data['detailSummary'] ?? null,
             'status' => DB::table('words')->where('id', $id)->value('status') === 'published' ? 'published' : 'draft',
             'updated_at' => $now,

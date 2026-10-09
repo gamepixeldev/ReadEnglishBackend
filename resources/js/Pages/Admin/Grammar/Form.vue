@@ -3,7 +3,7 @@ import { ref } from 'vue'
 import { Link, router, useForm } from '@inertiajs/vue3'
 import AdminLayout from '../../../Layouts/AdminLayout.vue'
 
-const props = defineProps({ lesson: Object, content: Object, questions: Array })
+const props = defineProps({ lesson: Object, content: Object, questions: Array, levels: Array })
 const editing = Boolean(props.lesson)
 let nextKey = 0
 function newQuestion(source = {}) {
@@ -16,7 +16,7 @@ function newQuestion(source = {}) {
 const form = useForm({
   title: props.lesson?.title || '', summary: props.lesson?.summary || '',
   level: props.lesson?.level || '', sortOrder: props.lesson?.sort_order ?? 0,
-  contentType: props.content?.type || 'richtext', contentHtml: props.content?.html || '',
+  contentType: props.content?.type || 'richtext', contentFormat: props.content?.format || 'html', contentHtml: props.content?.html || '',
   contentUrl: props.content?.url || '', contentTitle: props.content?.title || '',
   contentSummary: props.content?.summary || '',
   questions: props.questions?.length ? props.questions.map(newQuestion) : [newQuestion()]
@@ -38,14 +38,14 @@ function command(name, value) { document.execCommand(name, false, value || null)
         <div class="form-grid">
           <div class="form-field wide"><label>课程标题 <b class="required-mark">*</b></label><el-input v-model="form.title" maxlength="255" /></div>
           <div class="form-field wide"><label>简要介绍</label><el-input v-model="form.summary" type="textarea" :rows="2" /></div>
-          <div class="form-field"><label>级别</label><el-input v-model="form.level" placeholder="例如：基础语法" /></div>
+          <div class="form-field"><label>级别 <b class="required-mark">*</b></label><el-select v-model="form.level" placeholder="请选择语法级别"><el-option v-for="level in levels" :key="level.name" :label="level.name" :value="level.name" :disabled="!level.is_active && level.name !== form.level" /></el-select><small v-if="form.errors.level" class="form-error">{{ form.errors.level }}</small></div>
           <div class="form-field"><label>列表顺序</label><el-input v-model.number="form.sortOrder" type="number" min="0" /></div>
           <div class="form-field"><label>讲解形式</label><el-select v-model="form.contentType"><el-option value="richtext" label="富文本" /><el-option value="officialAccount" label="公众号文章" /></el-select></div>
           <div class="form-field"><label>讲解标题（选填）</label><el-input v-model="form.contentTitle" /></div>
           <div v-if="form.contentType === 'officialAccount'" class="form-field wide"><label>公众号文章链接 <b class="required-mark">*</b></label><el-input v-model="form.contentUrl" placeholder="https://..." /></div>
           <div v-if="form.contentType === 'officialAccount'" class="form-field wide"><label>文章摘要</label><el-input v-model="form.contentSummary" type="textarea" :rows="2" /></div>
         </div>
-        <div v-if="form.contentType === 'richtext'" class="form-field"><label>讲解正文 <b class="required-mark">*</b></label><div class="toolbar"><el-button size="small" @click="command('bold')"><b>粗体</b></el-button><el-button size="small" @click="command('italic')"><i>斜体</i></el-button><el-button size="small" @click="command('insertUnorderedList')">列表</el-button><el-button size="small" @click="command('formatBlock','h3')">小标题</el-button></div><div class="rich-editor" contenteditable="true" data-placeholder="填写规则、用法和例句…" v-html="form.contentHtml" @input="form.contentHtml = $event.target.innerHTML"></div></div>
+        <div v-if="form.contentType === 'richtext'" class="form-field"><label>讲解正文 <b class="required-mark">*</b></label><el-radio-group v-model="form.contentFormat"><el-radio-button value="html">富文本</el-radio-button><el-radio-button value="markdown">Markdown</el-radio-button></el-radio-group><template v-if="form.contentFormat === 'html'"><div class="toolbar"><el-button size="small" @click="command('bold')"><b>粗体</b></el-button><el-button size="small" @click="command('italic')"><i>斜体</i></el-button><el-button size="small" @click="command('insertUnorderedList')">列表</el-button><el-button size="small" @click="command('formatBlock','h3')">小标题</el-button></div><div class="rich-editor" contenteditable="true" data-placeholder="填写规则、用法和例句…" v-html="form.contentHtml" @input="form.contentHtml = $event.target.innerHTML"></div></template><el-input v-else v-model="form.contentHtml" type="textarea" :rows="18" placeholder="可以直接粘贴 Markdown 内容" /><small v-if="form.errors.contentHtml" class="form-error">{{ form.errors.contentHtml }}</small></div>
       </div></section>
       <section class="card"><div class="card-header"><div><h2>随堂题目</h2><p>选择题的正确答案按选项顺序设置。</p></div><el-button @click="addQuestion">＋ 添加题目</el-button></div><div class="card-body">
         <el-collapse v-model="expanded" class="editor-collapse"><el-collapse-item v-for="(question, index) in form.questions" :key="question.key" :name="question.key"><template #title><strong>第 {{ index + 1 }} 题 · {{ question.prompt || '未填写题目' }}</strong></template>
@@ -58,7 +58,6 @@ function command(name, value) { document.execCommand(name, false, value || null)
           </div><div class="section-actions"><el-button v-if="form.questions.length > 1" link type="danger" @click="removeQuestion(index)">移除本题</el-button></div>
         </el-collapse-item></el-collapse>
       </div></section>
-      <div class="section-actions"><el-button type="primary" :loading="form.processing" @click="save">保存课程与题目</el-button></div>
-    </div><aside class="form-stack"><section class="card"><div class="card-header"><h2>发布状态</h2></div><div class="card-body"><template v-if="editing"><p><el-tag :type="lesson.status === 'published' ? 'success' : 'info'">{{ lesson.status === 'published' ? '已发布' : '草稿' }}</el-tag></p><p class="helper">保存后再发布。已发布的内容修改保存后会同步更新前台。</p><el-button :type="lesson.status === 'published' ? 'danger' : 'primary'" :plain="lesson.status === 'published'" @click="toggle">{{ lesson.status === 'published' ? '下架课程' : '发布课程' }}</el-button></template><p v-else class="helper">创建后默认为草稿。</p></div></section></aside></div>
+    </div><aside class="form-stack editor-actions-panel"><section class="card"><div class="card-header"><h2>发布状态</h2></div><div class="card-body"><template v-if="editing"><p><el-tag :type="lesson.status === 'published' ? 'success' : 'info'">{{ lesson.status === 'published' ? '已发布' : '草稿' }}</el-tag></p><p class="helper">保存后再发布。已发布的内容修改保存后会同步更新前台。</p></template><p v-else class="helper">创建后默认为草稿。</p><el-button type="primary" :loading="form.processing" @click="save">保存课程与题目</el-button><el-button v-if="editing" :type="lesson.status === 'published' ? 'danger' : 'default'" :plain="lesson.status === 'published'" @click="toggle">{{ lesson.status === 'published' ? '下架课程' : '发布课程' }}</el-button></div></section></aside></div>
   </AdminLayout>
 </template>

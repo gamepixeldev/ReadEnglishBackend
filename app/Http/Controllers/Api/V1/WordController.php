@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\HtmlContentSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class WordController extends Controller
 {
-    public function show(int $id): JsonResponse
+    public function show(int $id, HtmlContentSanitizer $sanitizer): JsonResponse
     {
         $word = DB::table('words')->where('id', $id)->where('status', 'published')->first();
         if (! $word) {
@@ -27,7 +29,7 @@ class WordController extends Controller
             'audioAsset' => $word->audio_asset,
             'contentSource' => $source ? [
                 'type' => $source->type,
-                'html' => $source->type === 'richtext' ? $source->html : null,
+                'html' => $source->type === 'richtext' ? $sanitizer->clean(($source->format ?? 'html') === 'markdown' ? Str::markdown($source->html ?? '') : $source->html) : null,
                 'url' => $source->type === 'officialAccount' ? $source->url : null,
                 'title' => $source->title,
                 'summary' => $source->summary,

@@ -43,6 +43,7 @@ class DailyWordPlanController extends Controller
     public function wordOptions(Request $request): JsonResponse
     {
         $search = trim((string) $request->query('q', ''));
+        if ($search === '') return response()->json(['items' => []]);
         $words = DB::table('words')->where('status', 'published')
             ->when($search !== '', fn ($query) => $query->where(function ($match) use ($search): void {
                 $match->where('headword', 'like', '%'.$search.'%')->orWhere('meaning', 'like', '%'.$search.'%');

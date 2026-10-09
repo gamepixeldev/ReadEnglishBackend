@@ -7,6 +7,7 @@ use App\Services\HtmlContentSanitizer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class ContentAdminController extends Controller
@@ -305,19 +306,22 @@ class ContentAdminController extends Controller
         if (! DB::table('words')->where('id', $id)->exists()) return $this->notFound();
         $data = $request->validate([
             'type' => 'required|in:richtext,officialAccount',
+            'format' => 'sometimes|in:html,markdown',
             'html' => 'required_if:type,richtext|nullable|string|max:1000000',
             'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
             'title' => 'nullable|string|max:255', 'summary' => 'nullable|string|max:10000',
         ]);
-        if ($data['type'] === 'richtext') $data['html'] = app(HtmlContentSanitizer::class)->clean($data['html'] ?? '');
-        if ($data['type'] === 'richtext' && trim(strip_tags($data['html'])) === '') {
+        $format = $data['type'] === 'richtext' ? ($data['format'] ?? 'html') : 'html';
+        $rendered = $data['type'] === 'richtext' ? app(HtmlContentSanitizer::class)->clean($format === 'markdown' ? Str::markdown($data['html'] ?? '') : ($data['html'] ?? '')) : null;
+        if ($data['type'] === 'richtext' && trim(strip_tags((string) $rendered)) === '') {
             return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '富文本清理后没有可显示的内容']], 422);
         }
+        if ($data['type'] === 'richtext' && $format === 'html') $data['html'] = $rendered;
         $now = now();
         $exists = DB::table('word_details')->where('word_id', $id)->exists();
         $detailStatus = DB::table('words')->where('id', $id)->value('status') === 'published' ? 'published' : 'draft';
         DB::table('word_details')->updateOrInsert(['word_id' => $id], [
-            'type' => $data['type'], 'html' => $data['html'] ?? null, 'url' => $data['url'] ?? null,
+            'type' => $data['type'], 'format' => $format, 'html' => $data['html'] ?? null, 'url' => $data['url'] ?? null,
             'title' => $data['title'] ?? null, 'summary' => $data['summary'] ?? null,
             'status' => $detailStatus, 'updated_at' => $now,
         ] + ($exists ? [] : ['created_at' => $now]));
@@ -363,7 +367,7 @@ class ContentAdminController extends Controller
             'frequencyLabel' => $word->frequency_label, 'audioAsset' => $word->audio_asset,
             'status' => $word->status,
             'detail' => $detail ? [
-                'id' => (int) $detail->id, 'type' => $detail->type, 'html' => $detail->html,
+                'id' => (int) $detail->id, 'type' => $detail->type, 'format' => $detail->format ?? 'html', 'html' => $detail->html,
                 'url' => $detail->url, 'title' => $detail->title, 'summary' => $detail->summary,
                 'status' => $detail->status,
             ] : null,

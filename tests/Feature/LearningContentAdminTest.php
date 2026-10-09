@@ -116,4 +116,63 @@ class LearningContentAdminTest extends TestCase
             ->assertSessionHasErrors('wordIds');
         $this->assertSame($wordIds, DB::table('daily_word_plan_items')->where('plan_id', $id)->orderBy('sort_order')->pluck('word_id')->all());
     }
+
+    public function test_word_markdown_is_stored_as_source_and_rendered_for_app(): void
+    {
+        $this->admin();
+        $markdown = "## 用法\n\n**river** means 河流.\n\n<script>alert(1)</script>";
+        $this->post('/admin/words', [
+            'headword' => 'river', 'meaning' => '河流', 'detailType' => 'richtext',
+            'detailFormat' => 'markdown', 'detailHtml' => $markdown,
+        ])->assertRedirect();
+        $id = (int) DB::table('words')->where('headword', 'river')->value('id');
+        $detail = DB::table('word_details')->where('word_id', $id)->first();
+        $this->assertSame('markdown', $detail->format);
+        $this->assertSame($markdown, $detail->html);
+        $this->post("/admin/words/{$id}/publish")->assertRedirect();
+        $html = $this->getJson("/api/v1/words/{$id}")->assertOk()->json('contentSource.html');
+        $this->assertStringContainsString('<h2>用法</h2>', $html);
+        $this->assertStringNotContainsString('<script>', $html);
+    }
+
+    public function test_grammar_level_management_and_markdown_rendering(): void
+    {
+        $this->admin();
+        $this->get('/admin/grammar-levels')->assertOk();
+        $this->post('/admin/grammar-levels', ['name' => '高级语法'])->assertRedirect();
+        $levelId = (int) DB::table('grammar_levels')->where('name', '高级语法')->value('id');
+        $this->assertGreaterThan(0, $levelId);
+        $this->post("/admin/grammar-levels/{$levelId}/toggle")->assertRedirect();
+        $this->assertSame(0, (int) DB::table('grammar_levels')->where('id', $levelId)->value('is_active'));
+        $this->post('/admin/grammar', [
+            'title' => 'Disabled level', 'level' => '高级语法',
+            'contentType' => 'richtext', 'contentHtml' => '<p>test</p>',
+            'questions' => [['kind' => 'choice', 'prompt' => 'Choose', 'options' => ['A', 'B'], 'answer' => 0]],
+        ])->assertSessionHasErrors('level');
+        $this->post("/admin/grammar-levels/{$levelId}/toggle")->assertRedirect();
+
+        $markdown = "## 一般现在时\n\nShe **walks** every day.";
+        $this->post('/admin/grammar', [
+            'title' => 'Present simple', 'level' => '高级语法',
+            'contentType' => 'richtext', 'contentFormat' => 'markdown', 'contentHtml' => $markdown,
+            'questions' => [['kind' => 'choice', 'prompt' => 'She ___.', 'options' => ['walk', 'walks'], 'answer' => 1]],
+        ])->assertRedirect();
+        $id = (int) DB::table('grammar_lessons')->where('title', 'Present simple')->value('id');
+        $content = DB::table('grammar_lesson_contents')->where('grammar_lesson_id', $id)->first();
+        $this->assertSame('markdown', $content->format);
+        $this->assertSame($markdown, $content->html);
+        $this->post("/admin/grammar/{$id}/toggle")->assertRedirect();
+        $this->assertStringContainsString('<h2>一般现在时</h2>', $this->getJson("/api/v1/grammar-lessons/{$id}")->assertOk()->json('contentSource.html'));
+    }
+
+    public function test_daily_word_search_requires_a_query(): void
+    {
+        $this->admin();
+        DB::table('words')->insert([
+            'headword' => 'river', 'meaning' => '河流', 'status' => 'published',
+            'created_at' => now(), 'updated_at' => now(),
+        ]);
+        $this->getJson('/admin/daily-words/word-options')->assertOk()->assertJsonCount(0, 'items');
+        $this->getJson('/admin/daily-words/word-options?q=riv')->assertOk()->assertJsonPath('items.0.headword', 'river');
+    }
 }
