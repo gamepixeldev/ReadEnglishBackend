@@ -9,6 +9,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 
 class MobileAuthController extends Controller
 {
@@ -47,7 +48,7 @@ class MobileAuthController extends Controller
                 return $identity->user;
             }
 
-            $user = User::query()->create(['name' => '微信用户', 'is_admin' => false]);
+            $user = User::query()->create(['is_admin' => false]);
             UserIdentity::query()->create([
                 'user_id' => $user->id,
                 'provider' => 'wechat_mini',
@@ -82,6 +83,34 @@ class MobileAuthController extends Controller
     public function me(Request $request)
     {
         return response()->json(['user' => $this->publicUser($request->user())]);
+    }
+
+    public function updateProfile(Request $request)
+    {
+        $input = $request->validate(['name' => ['required', 'string', 'max:24']]);
+        $name = trim($input['name']);
+        if ($name === '') {
+            return $this->error('INVALID_NICKNAME', '请输入昵称', 422);
+        }
+
+        $user = $request->user();
+        $user->update(['name' => $name]);
+
+        return response()->json(['user' => $this->publicUser($user)]);
+    }
+
+    public function uploadAvatar(Request $request)
+    {
+        $request->validate(['avatar' => ['required', 'file', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048']]);
+        $path = $request->file('avatar')->store('avatars', 'public');
+        if (! $path) {
+            return $this->error('AVATAR_UPLOAD_FAILED', '头像上传失败，请重试', 500);
+        }
+
+        $user = $request->user();
+        $user->update(['avatar_url' => Storage::disk('public')->url($path)]);
+
+        return response()->json(['user' => $this->publicUser($user)]);
     }
 
     public function logout(Request $request)

@@ -16,6 +16,8 @@ Route::prefix('v1')->group(function (): void {
     Route::post('auth/wechat', [MobileAuthController::class, 'wechat'])->middleware('throttle:10,1');
     Route::middleware(AuthenticateMobileToken::class)->group(function (): void {
         Route::get('auth/me', [MobileAuthController::class, 'me']);
+        Route::patch('auth/profile', [MobileAuthController::class, 'updateProfile']);
+        Route::post('auth/avatar', [MobileAuthController::class, 'uploadAvatar']);
         Route::post('auth/logout', [MobileAuthController::class, 'logout']);
     });
     Route::prefix('admin')->middleware(RequireContentAdminToken::class)->group(function (): void {
