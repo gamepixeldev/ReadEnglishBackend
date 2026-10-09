@@ -4,6 +4,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\ContentController;
 use App\Http\Controllers\Admin\ReadingLevelController;
+use App\Http\Controllers\Admin\GrammarLessonController;
+use App\Http\Controllers\Admin\PuzzleSetController;
+use App\Http\Controllers\Admin\DailyWordPlanController;
 
 Route::get('/', function () {
     return response()->json(['service' => 'EnglishStudyAPI']);
@@ -24,6 +27,26 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::get('/series/{seriesId}/chapters/create', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->name('admin.series.chapters.create');
     Route::get('/series/{seriesId}/chapters/{id}/edit', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.edit');
     Route::get('/words', [ContentController::class, 'words'])->name('admin.words.index');
+    Route::get('/grammar', [GrammarLessonController::class, 'index'])->name('admin.grammar.index');
+    Route::get('/grammar/create', [GrammarLessonController::class, 'form'])->name('admin.grammar.create');
+    Route::get('/grammar/{id}/edit', [GrammarLessonController::class, 'form'])->whereNumber('id')->name('admin.grammar.edit');
+    Route::post('/grammar', [GrammarLessonController::class, 'save'])->name('admin.grammar.store');
+    Route::put('/grammar/{id}', [GrammarLessonController::class, 'save'])->whereNumber('id')->name('admin.grammar.update');
+    Route::post('/grammar/{id}/toggle', [GrammarLessonController::class, 'toggle'])->whereNumber('id')->name('admin.grammar.toggle');
+    Route::get('/puzzles', [PuzzleSetController::class, 'index'])->name('admin.puzzles.index');
+    Route::get('/puzzles/create', [PuzzleSetController::class, 'form'])->name('admin.puzzles.create');
+    Route::get('/puzzles/reading-options', [PuzzleSetController::class, 'readingOptions'])->name('admin.puzzles.reading-options');
+    Route::get('/puzzles/{id}/edit', [PuzzleSetController::class, 'form'])->whereNumber('id')->name('admin.puzzles.edit');
+    Route::post('/puzzles', [PuzzleSetController::class, 'save'])->name('admin.puzzles.store');
+    Route::put('/puzzles/{id}', [PuzzleSetController::class, 'save'])->whereNumber('id')->name('admin.puzzles.update');
+    Route::post('/puzzles/{id}/toggle', [PuzzleSetController::class, 'toggle'])->whereNumber('id')->name('admin.puzzles.toggle');
+    Route::get('/daily-words', [DailyWordPlanController::class, 'index'])->name('admin.daily-words.index');
+    Route::get('/daily-words/create', [DailyWordPlanController::class, 'form'])->name('admin.daily-words.create');
+    Route::get('/daily-words/word-options', [DailyWordPlanController::class, 'wordOptions'])->name('admin.daily-words.word-options');
+    Route::get('/daily-words/{id}/edit', [DailyWordPlanController::class, 'form'])->whereNumber('id')->name('admin.daily-words.edit');
+    Route::post('/daily-words', [DailyWordPlanController::class, 'save'])->name('admin.daily-words.store');
+    Route::put('/daily-words/{id}', [DailyWordPlanController::class, 'save'])->whereNumber('id')->name('admin.daily-words.update');
+    Route::post('/daily-words/{id}/toggle', [DailyWordPlanController::class, 'toggle'])->whereNumber('id')->name('admin.daily-words.toggle');
     Route::get('/reading-levels', [ReadingLevelController::class, 'index'])->name('admin.reading-levels.index');
     Route::post('/reading-levels', [ReadingLevelController::class, 'store'])->name('admin.reading-levels.store');
     Route::post('/reading-levels/{id}/toggle', [ReadingLevelController::class, 'toggle'])->whereNumber('id')->name('admin.reading-levels.toggle');
