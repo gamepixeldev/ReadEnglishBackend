@@ -56,11 +56,155 @@ class ContentController extends Controller
         }
         if ($status) $query->where('status', $status);
 
+        $articles = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString();
+        $articles->getCollection()->transform(function (object $article): object {
+            $article->publishChecks = $this->articlePublishChecks($article);
+            return $article;
+        });
+
         return Inertia::render('Admin/Articles/Index', [
-            'articles' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'articles' => $articles,
             'search' => $search,
             'status' => $status,
         ]);
+    }
+
+    public function series(Request $request): InertiaResponse
+    {
+        $search = trim((string) $request->query('q', ''));
+        $status = in_array($request->query('status'), ['draft', 'published'], true) ? $request->query('status') : null;
+        $query = DB::table('series')->select('series.*')->selectSub(
+            DB::table('reading_items')->selectRaw('count(*)')->whereColumn('series_id', 'series.id')->where('kind', 'chapter'),
+            'chapter_count'
+        );
+        if ($search !== '') {
+            $query->where(function ($query) use ($search): void {
+                $query->where('title', 'like', '%'.$search.'%')->orWhere('translation', 'like', '%'.$search.'%');
+            });
+        }
+        if ($status) $query->where('status', $status);
+
+        return Inertia::render('Admin/Series/Index', [
+            'seriesItems' => $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString(),
+            'search' => $search,
+            'status' => $status,
+        ]);
+    }
+
+    public function seriesForm(?int $id = null): InertiaResponse
+    {
+        $series = $id ? DB::table('series')->where('id', $id)->first() : null;
+        if ($id) abort_unless($series, 404);
+        if ($series) {
+            $series->chapters = DB::table('reading_items')->where('series_id', $id)->where('kind', 'chapter')
+                ->orderBy('chapter_no')->get();
+        }
+
+        return Inertia::render('Admin/Series/Form', [
+            'series' => $series,
+            'coverUrl' => ReadingCover::url($series->cover_asset ?? null),
+        ]);
+    }
+
+    public function saveSeries(Request $request, ?int $id = null): RedirectResponse
+    {
+        $data = $request->validate([
+            'title' => 'required|string|max:255', 'translation' => 'nullable|string|max:255',
+            'author' => 'nullable|string|max:255', 'level' => 'nullable|string|max:32',
+            'description' => 'nullable|string|max:10000',
+            'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
+            'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
+            'rightsNote' => 'nullable|string|max:10000',
+        ]);
+        $existing = $id ? DB::table('series')->where('id', $id)->first() : null;
+        if ($id) abort_unless($existing, 404);
+        $coverAsset = $existing->cover_asset ?? null;
+        if ($request->hasFile('coverImage')) {
+            $coverAsset = $request->file('coverImage')->store('series-covers', 'public');
+            if (! $coverAsset) abort(500, '封面保存失败');
+        }
+        $row = [
+            'title' => trim($data['title']), 'translation' => $data['translation'] ?? null,
+            'author' => $data['author'] ?? null, 'level' => $data['level'] ?? null,
+            'description' => $data['description'] ?? null, 'cover_asset' => $coverAsset,
+            'rights_type' => $data['rightsType'] ?? null, 'rights_note' => $data['rightsNote'] ?? null,
+            'updated_at' => now(),
+        ];
+        if ($id) {
+            DB::table('series')->where('id', $id)->update($row);
+        } else {
+            $row['status'] = 'draft';
+            $row['sort_order'] = (int) DB::table('series')->max('sort_order') + 1;
+            $row['created_at'] = now();
+            $id = DB::table('series')->insertGetId($row);
+        }
+
+        return redirect()->route('admin.series.edit', $id)->with('success', '外刊小说信息已保存');
+    }
+
+    public function publishSeries(int $id): RedirectResponse
+    {
+        $series = DB::table('series')->where('id', $id)->first();
+        abort_unless($series, 404);
+        $hasPublishedChapter = DB::table('reading_items')->where('series_id', $id)->where('kind', 'chapter')->where('status', 'published')->exists();
+        if (! $series->rights_type || ! $series->rights_note || ! $hasPublishedChapter) {
+            return back()->withErrors(['publish' => '发布外刊小说前，请补齐版权来源，并至少发布一个章节。']);
+        }
+        DB::table('series')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
+        return redirect()->route('admin.series.index')->with('success', '外刊小说已发布');
+    }
+
+    public function unpublishSeries(int $id): RedirectResponse
+    {
+        abort_unless(DB::table('series')->where('id', $id)->exists(), 404);
+        DB::table('series')->where('id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
+        return redirect()->route('admin.series.index')->with('success', '外刊小说已下架');
+    }
+
+    public function moveChapter(int $seriesId, int $id, string $direction): RedirectResponse
+    {
+        abort_unless(in_array($direction, ['up', 'down'], true), 404);
+        $chapter = DB::table('reading_items')->where('id', $id)->where('series_id', $seriesId)->where('kind', 'chapter')->first();
+        abort_unless($chapter, 404);
+        DB::transaction(function () use ($seriesId, $chapter, $direction): void {
+            $ordered = DB::table('reading_items')->where('series_id', $seriesId)->where('kind', 'chapter')->orderBy('chapter_no')->get(['id', 'chapter_no']);
+            $position = $ordered->search(fn ($item) => (int) $item->id === (int) $chapter->id);
+            $targetPosition = $direction === 'up' ? $position - 1 : $position + 1;
+            if ($position === false || ! isset($ordered[$targetPosition])) return;
+            $target = $ordered[$targetPosition];
+            $temporaryNo = (int) $ordered->max('chapter_no') + 1;
+            DB::table('reading_items')->where('id', $chapter->id)->update(['chapter_no' => $temporaryNo]);
+            DB::table('reading_items')->where('id', $target->id)->update(['chapter_no' => $chapter->chapter_no, 'sort_order' => $chapter->chapter_no, 'updated_at' => now()]);
+            DB::table('reading_items')->where('id', $chapter->id)->update(['chapter_no' => $target->chapter_no, 'sort_order' => $target->chapter_no, 'updated_at' => now()]);
+        });
+        return redirect()->route('admin.series.edit', $seriesId)->with('success', '章节顺序已更新');
+    }
+
+    public function publishChapter(int $seriesId, int $id): RedirectResponse
+    {
+        $chapter = DB::table('reading_items')->where('id', $id)->where('series_id', $seriesId)->where('kind', 'chapter')->first();
+        abort_unless($chapter, 404);
+        $series = DB::table('series')->where('id', $seriesId)->first();
+        $body = json_decode($chapter->body_json, true) ?: [];
+        $hasSentences = collect($body)->contains(fn ($paragraph) => collect($paragraph['sentences'] ?? [])->contains(fn ($sentence) => trim((string) $sentence) !== ''));
+        if (! trim($chapter->title) || ! $hasSentences || ! ($chapter->rights_type || $series->rights_type) || ! ($chapter->rights_note || $series->rights_note)) {
+            return back()->withErrors(['publish' => '发布章节前，请补齐章节标题、英文正文，以及章节或小说级的版权来源信息。']);
+        }
+        DB::transaction(function () use ($id): void {
+            DB::table('reading_items')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
+            DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'published', 'updated_at' => now()]);
+        });
+        return redirect()->route('admin.series.edit', $seriesId)->with('success', '章节已发布');
+    }
+
+    public function unpublishChapter(int $seriesId, int $id): RedirectResponse
+    {
+        abort_unless(DB::table('reading_items')->where('id', $id)->where('series_id', $seriesId)->where('kind', 'chapter')->exists(), 404);
+        DB::transaction(function () use ($id): void {
+            DB::table('reading_items')->where('id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
+            DB::table('reading_analyses')->where('reading_item_id', $id)->update(['status' => 'draft', 'updated_at' => now()]);
+        });
+        return redirect()->route('admin.series.edit', $seriesId)->with('success', '章节已下架');
     }
 
     public function articleForm(HtmlContentSanitizer $sanitizer, ?int $id = null): InertiaResponse
@@ -84,6 +228,41 @@ class ContentController extends Controller
 
         return Inertia::render('Admin/Articles/Form', [
             'article' => $article,
+            'kind' => 'article',
+            'series' => null,
+            'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
+            'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
+            'selectedWords' => $article
+                ? DB::table('words')->whereIn('id', $article->wordIds)->get()
+                    ->sortBy(fn ($word) => array_search((int) $word->id, $article->wordIds, true))->values()
+                : collect(),
+        ]);
+    }
+
+    public function chapterForm(HtmlContentSanitizer $sanitizer, int $seriesId, ?int $id = null): InertiaResponse
+    {
+        $series = DB::table('series')->where('id', $seriesId)->first();
+        abort_unless($series, 404);
+        $article = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'chapter')->where('series_id', $seriesId)->first() : null;
+        if ($id) abort_unless($article, 404);
+        if ($article) {
+            $article->body = json_decode($article->body_json, true) ?: [];
+            $article->analysis = DB::table('reading_analyses')->where('reading_item_id', $id)->first();
+            if ($article->analysis?->type === 'richtext' && ($article->analysis->format ?? 'html') === 'html') {
+                $article->analysis->html = $sanitizer->clean($article->analysis->html ?? '');
+            }
+            $article->wordIds = DB::table('reading_words')->where('reading_item_id', $id)->orderBy('sort_order')->pluck('word_id')->map(fn ($wordId): int => (int) $wordId)->all();
+            $article->questions = DB::table('reading_questions')->where('reading_item_id', $id)->orderBy('sort_order')->get()->map(function ($question) {
+                $question->options = $question->options_json ? (json_decode($question->options_json, true) ?: []) : [];
+                return $question;
+            });
+        }
+
+        return Inertia::render('Admin/Articles/Form', [
+            'article' => $article,
+            'kind' => 'chapter',
+            'series' => $series,
+            'nextChapterNo' => (int) DB::table('reading_items')->where('series_id', $seriesId)->where('kind', 'chapter')->max('chapter_no') + 1,
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
             'selectedWords' => $article
@@ -132,10 +311,22 @@ class ContentController extends Controller
 
     public function saveArticle(Request $request, ?int $id = null): RedirectResponse
     {
+        return $this->saveReadingItem($request, 'article', null, $id);
+    }
+
+    public function saveChapter(Request $request, int $seriesId, ?int $id = null): RedirectResponse
+    {
+        abort_unless(DB::table('series')->where('id', $seriesId)->exists(), 404);
+        return $this->saveReadingItem($request, 'chapter', $seriesId, $id);
+    }
+
+    private function saveReadingItem(Request $request, string $kind, ?int $seriesId, ?int $id): RedirectResponse
+    {
         $data = $request->validate([
             'slug' => ['nullable', 'string', 'max:100', Rule::unique('reading_items', 'slug')->ignore($id)],
             'title' => 'required|string|max:255', 'translation' => 'nullable|string|max:255',
             'level' => 'nullable|string|max:32', 'minutes' => 'nullable|integer|min:1|max:65535',
+            'chapterNo' => $kind === 'chapter' ? ['required', 'integer', 'min:1', 'max:65535', Rule::unique('reading_items', 'chapter_no')->where(fn ($query) => $query->where('series_id', $seriesId)->where('kind', 'chapter'))->ignore($id)] : 'prohibited',
             'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'detailImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'paragraphs' => 'required|array|min:1',
@@ -157,7 +348,9 @@ class ContentController extends Controller
             $body[] = ['sentences' => $sentences, 'translation' => trim($paragraph['translation']), 'sentenceTranslations' => $sentenceTranslations];
         }
 
-        $existing = $id ? DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first() : null;
+        $existingQuery = DB::table('reading_items')->where('kind', $kind);
+        if ($kind === 'chapter') $existingQuery->where('series_id', $seriesId);
+        $existing = $id ? $existingQuery->where('id', $id)->first() : null;
         if ($id) abort_unless($existing, 404);
         $coverAsset = $existing->cover_asset ?? null;
         if ($request->hasFile('coverImage')) {
@@ -171,7 +364,8 @@ class ContentController extends Controller
         }
 
         $row = [
-            'slug' => $data['slug'] ?? null, 'kind' => 'article', 'title' => $data['title'],
+            'slug' => $data['slug'] ?? null, 'kind' => $kind, 'series_id' => $seriesId,
+            'chapter_no' => $kind === 'chapter' ? (int) $data['chapterNo'] : null, 'title' => $data['title'],
             'translation' => $data['translation'] ?? null, 'level' => $data['level'] ?? null,
             'minutes' => $data['minutes'] ?? null, 'cover_asset' => $coverAsset,
             'detail_image_asset' => $detailImageAsset,
@@ -179,22 +373,25 @@ class ContentController extends Controller
             'rights_type' => $data['rightsType'] ?? null, 'rights_note' => $data['rightsNote'] ?? null,
             'updated_at' => now(),
         ];
+        if ($kind === 'chapter') $row['sort_order'] = (int) $data['chapterNo'];
 
         if ($id) {
             DB::table('reading_items')->where('id', $id)->update($row);
         } else {
             $row['status'] = 'draft';
-            $row['sort_order'] = 0;
+            $row['sort_order'] = $kind === 'chapter' ? (int) $data['chapterNo'] : 0;
             $row['created_at'] = now();
             $id = DB::table('reading_items')->insertGetId($row);
         }
 
-        return redirect()->route('admin.articles.edit', $id)->with('success', '文章已保存');
+        return $kind === 'chapter'
+            ? redirect()->route('admin.series.chapters.edit', [$seriesId, $id])->with('success', '章节已保存')
+            : redirect()->route('admin.articles.edit', $id)->with('success', '文章已保存');
     }
 
     public function saveAnalysis(Request $request, int $id, HtmlContentSanitizer $sanitizer): RedirectResponse
     {
-        $article = DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first();
+        $article = $this->editableReadingItem($id);
         abort_unless($article, 404);
         $data = $request->validate([
             'type' => 'required|in:richtext,officialAccount',
@@ -222,12 +419,13 @@ class ContentController extends Controller
             'status' => $article->status === 'published' ? 'published' : 'draft', 'updated_at' => $now,
         ] + ($exists ? [] : ['created_at' => $now]));
 
-        return redirect()->route('admin.articles.edit', $id)->with('success', '文章解析已保存');
+        return $this->redirectToReadingEditor($article)->with('success', '文章解析已保存');
     }
 
     public function saveReadingWords(Request $request, int $id): RedirectResponse
     {
-        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        $article = $this->editableReadingItem($id);
+        abort_unless($article, 404);
         $data = $request->validate([
             'wordIds' => 'nullable|array|max:500',
             'wordIds.*' => 'required|integer|distinct|exists:words,id',
@@ -242,12 +440,13 @@ class ContentController extends Controller
             if ($rows !== []) DB::table('reading_words')->insert($rows);
         });
 
-        return redirect()->route('admin.articles.edit', $id)->with('success', '重点词汇顺序已保存');
+        return $this->redirectToReadingEditor($article)->with('success', '重点词汇顺序已保存');
     }
 
     public function saveReadingQuestions(Request $request, int $id): RedirectResponse
     {
-        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        $article = $this->editableReadingItem($id);
+        abort_unless($article, 404);
         $data = $request->validate([
             'questions' => 'nullable|array|max:100',
             'questions.*.id' => 'nullable|integer',
@@ -310,15 +509,18 @@ class ContentController extends Controller
             }
         });
 
-        return redirect()->route('admin.articles.edit', $id)->with('success', '阅读理解题已保存');
+        return $this->redirectToReadingEditor($article)->with('success', '阅读理解题已保存');
     }
 
     public function publishArticle(int $id): RedirectResponse
     {
         $article = DB::table('reading_items')->where('id', $id)->where('kind', 'article')->first();
         abort_unless($article, 404);
-        if (! $article->rights_type || ! $article->rights_note || ! $article->body_json) {
-            return back()->withErrors(['publish' => '请先补齐正文和版权来源说明']);
+        $failed = collect($this->articlePublishChecks($article))
+            ->filter(fn (array $check): bool => $check['required'] && ! $check['passed'])
+            ->pluck('label')->all();
+        if ($failed !== []) {
+            return back()->withErrors(['publish' => '发布前请完成：'.implode('、', $failed)]);
         }
         DB::transaction(function () use ($id): void {
             DB::table('reading_items')->where('id', $id)->update(['status' => 'published', 'updated_at' => now()]);
@@ -339,7 +541,7 @@ class ContentController extends Controller
 
     public function searchArticleWords(Request $request, int $id): \Illuminate\Http\JsonResponse
     {
-        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        abort_unless($this->editableReadingItem($id), 404);
         $data = $request->validate(['q' => 'required|string|min:1|max:100']);
         $query = trim($data['q']);
         $items = DB::table('words')->where(function ($words) use ($query): void {
@@ -351,7 +553,7 @@ class ContentController extends Controller
 
     public function createArticleWord(Request $request, int $id): \Illuminate\Http\JsonResponse
     {
-        abort_unless(DB::table('reading_items')->where('id', $id)->where('kind', 'article')->exists(), 404);
+        abort_unless($this->editableReadingItem($id), 404);
         $data = $request->validate([
             'headword' => 'required|string|max:255', 'meaning' => 'required|string|max:255',
             'ipa' => 'nullable|string|max:255', 'partOfSpeech' => 'nullable|string|max:64',
@@ -460,5 +662,45 @@ class ContentController extends Controller
             'password' => Hash::make($data['password']), 'updated_at' => now(),
         ]);
         return back()->with('success', '密码已更新');
+    }
+
+    private function editableReadingItem(int $id): ?object
+    {
+        return DB::table('reading_items')->where('id', $id)->whereIn('kind', ['article', 'chapter'])->first();
+    }
+
+    private function redirectToReadingEditor(object $item): RedirectResponse
+    {
+        return $item->kind === 'chapter'
+            ? redirect()->route('admin.series.chapters.edit', [$item->series_id, $item->id])
+            : redirect()->route('admin.articles.edit', $item->id);
+    }
+
+    private function articlePublishChecks(object $article): array
+    {
+        $body = json_decode($article->body_json ?? '[]', true) ?: [];
+        $sentences = collect($body)->flatMap(fn ($paragraph) => $paragraph['sentences'] ?? [])
+            ->filter(fn ($sentence) => trim((string) $sentence) !== '');
+        $hasParagraphTranslations = $body !== [] && collect($body)->every(fn ($paragraph) => trim((string) ($paragraph['translation'] ?? '')) !== '');
+        $hasSentenceTranslations = $sentences->isNotEmpty() && collect($body)->every(function ($paragraph): bool {
+            $items = $paragraph['sentences'] ?? [];
+            $translations = $paragraph['sentenceTranslations'] ?? [];
+            return count($items) > 0 && collect($items)->keys()->every(fn ($index) => trim((string) ($translations[$index] ?? '')) !== '');
+        });
+        $analysisExists = DB::table('reading_analyses')->where('reading_item_id', $article->id)->exists();
+        $questionCount = DB::table('reading_questions')->where('reading_item_id', $article->id)->count();
+        $wordCount = DB::table('reading_words')->where('reading_item_id', $article->id)->count();
+
+        return [
+            ['key' => 'title', 'label' => '英文标题', 'passed' => trim((string) $article->title) !== '', 'required' => true],
+            ['key' => 'body', 'label' => '英文正文', 'passed' => $sentences->isNotEmpty(), 'required' => true],
+            ['key' => 'translation', 'label' => '各段中文翻译', 'passed' => $hasParagraphTranslations, 'required' => true],
+            ['key' => 'rights', 'label' => '版权来源与说明', 'passed' => trim((string) $article->rights_type) !== '' && trim((string) $article->rights_note) !== '', 'required' => true],
+            ['key' => 'cover', 'label' => '文章封面', 'passed' => trim((string) $article->cover_asset) !== '', 'required' => false],
+            ['key' => 'sentenceTranslations', 'label' => '逐句翻译', 'passed' => $hasSentenceTranslations, 'required' => false],
+            ['key' => 'words', 'label' => '重点词汇', 'passed' => $wordCount > 0, 'required' => false, 'detail' => $wordCount ? $wordCount.' 个' : null],
+            ['key' => 'analysis', 'label' => '语法解析', 'passed' => $analysisExists, 'required' => false],
+            ['key' => 'questions', 'label' => '阅读理解题', 'passed' => $questionCount > 0, 'required' => false, 'detail' => $questionCount ? $questionCount.' 道' : null],
+        ];
     }
 }

@@ -17,6 +17,11 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::get('/articles', [ContentController::class, 'articles'])->name('admin.articles.index');
     Route::get('/articles/create', [ContentController::class, 'articleForm'])->name('admin.articles.create');
     Route::get('/articles/{id}/edit', [ContentController::class, 'articleForm'])->whereNumber('id')->name('admin.articles.edit');
+    Route::get('/series', [ContentController::class, 'series'])->name('admin.series.index');
+    Route::get('/series/create', [ContentController::class, 'seriesForm'])->name('admin.series.create');
+    Route::get('/series/{id}/edit', [ContentController::class, 'seriesForm'])->whereNumber('id')->name('admin.series.edit');
+    Route::get('/series/{seriesId}/chapters/create', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->name('admin.series.chapters.create');
+    Route::get('/series/{seriesId}/chapters/{id}/edit', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.edit');
     Route::get('/words', [ContentController::class, 'words'])->name('admin.words.index');
     Route::get('/words/create', [ContentController::class, 'wordForm'])->name('admin.words.create');
     Route::get('/words/{id}/edit', [ContentController::class, 'wordForm'])->whereNumber('id')->name('admin.words.edit');
@@ -26,6 +31,20 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
 
     Route::post('/articles', [ContentController::class, 'saveArticle'])->name('admin.article.create');
     Route::put('/articles/{id}', [ContentController::class, 'saveArticle'])->whereNumber('id')->name('admin.article.update');
+    Route::post('/series', [ContentController::class, 'saveSeries'])->name('admin.series.store');
+    Route::put('/series/{id}', [ContentController::class, 'saveSeries'])->whereNumber('id')->name('admin.series.update');
+    Route::post('/series/{id}/publish', [ContentController::class, 'publishSeries'])->whereNumber('id')->name('admin.series.publish');
+    Route::post('/series/{id}/unpublish', [ContentController::class, 'unpublishSeries'])->whereNumber('id')->name('admin.series.unpublish');
+    Route::post('/series/{seriesId}/chapters', [ContentController::class, 'saveChapter'])->whereNumber('seriesId')->name('admin.series.chapters.store');
+    Route::put('/series/{seriesId}/chapters/{id}', [ContentController::class, 'saveChapter'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.update');
+    Route::post('/series/{seriesId}/chapters/{id}/move/{direction}', [ContentController::class, 'moveChapter'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.move');
+    Route::post('/series/{seriesId}/chapters/{id}/publish', [ContentController::class, 'publishChapter'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.publish');
+    Route::post('/series/{seriesId}/chapters/{id}/unpublish', [ContentController::class, 'unpublishChapter'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.unpublish');
+    Route::get('/chapters/{id}/word-options', [ContentController::class, 'searchArticleWords'])->whereNumber('id')->name('admin.chapter.word-options');
+    Route::post('/chapters/{id}/words/new', [ContentController::class, 'createArticleWord'])->whereNumber('id')->name('admin.chapter.word-create');
+    Route::put('/chapters/{id}/analysis', [ContentController::class, 'saveAnalysis'])->whereNumber('id')->name('admin.chapter.analysis');
+    Route::put('/chapters/{id}/questions', [ContentController::class, 'saveReadingQuestions'])->whereNumber('id')->name('admin.chapter.questions');
+    Route::put('/chapters/{id}/words', [ContentController::class, 'saveReadingWords'])->whereNumber('id')->name('admin.chapter.words');
     Route::get('/articles/{id}/word-options', [ContentController::class, 'searchArticleWords'])->whereNumber('id')->name('admin.article.word-options');
     Route::post('/articles/{id}/words/new', [ContentController::class, 'createArticleWord'])->whereNumber('id')->name('admin.article.word-create');
     Route::put('/articles/{id}/analysis', [ContentController::class, 'saveAnalysis'])->whereNumber('id')->name('admin.article.analysis');
