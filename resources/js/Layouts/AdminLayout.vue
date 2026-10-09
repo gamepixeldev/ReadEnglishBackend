@@ -23,6 +23,7 @@ function closeSidebar() { document.body.classList.remove('sidebar-open'); }
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Articles')}" href="/admin/articles"><span class="nav-icon">▤</span>精读文章</Link>
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Series')}" href="/admin/series"><span class="nav-icon">▣</span>外刊小说</Link>
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Words')}" href="/admin/words"><span class="nav-icon">Aa</span>单词管理</Link>
+        <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/ReadingLevels')}" href="/admin/reading-levels"><span class="nav-icon">≡</span>阅读级别</Link>
       </nav>
       <div class="nav-section">账号</div>
       <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component === 'Admin/Password'}" href="/admin/password"><span class="nav-icon">⚙</span>修改密码</Link></nav>

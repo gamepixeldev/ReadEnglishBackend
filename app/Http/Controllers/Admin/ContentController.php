@@ -103,7 +103,7 @@ class ContentController extends Controller
         return Inertia::render('Admin/Series/Form', [
             'series' => $series,
             'coverUrl' => ReadingCover::url($series->cover_asset ?? null),
-            'readingLevels' => config('reading.levels', []),
+            'readingLevels' => $this->readingLevelOptions(),
         ]);
     }
 
@@ -111,7 +111,7 @@ class ContentController extends Controller
     {
         $data = $request->validate([
             'title' => 'required|string|max:255', 'translation' => 'nullable|string|max:255',
-            'author' => 'nullable|string|max:255', 'level' => ['nullable', 'string', 'max:32', Rule::in(array_column(config('reading.levels', []), 'value'))],
+            'author' => 'nullable|string|max:255', 'level' => ['nullable', 'string', 'max:32', Rule::exists('reading_levels', 'name')],
             'description' => 'nullable|string|max:10000',
             'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'rightsType' => ['nullable', 'string', Rule::in(['original', 'authorized', 'public_domain', 'excerpt', 'other'])],
@@ -231,7 +231,7 @@ class ContentController extends Controller
             'article' => $article,
             'kind' => 'article',
             'series' => null,
-            'readingLevels' => config('reading.levels', []),
+            'readingLevels' => $this->readingLevelOptions(),
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
             'selectedWords' => $article
@@ -264,7 +264,7 @@ class ContentController extends Controller
             'article' => $article,
             'kind' => 'chapter',
             'series' => $series,
-            'readingLevels' => config('reading.levels', []),
+            'readingLevels' => $this->readingLevelOptions(),
             'nextChapterNo' => (int) DB::table('reading_items')->where('series_id', $seriesId)->where('kind', 'chapter')->max('chapter_no') + 1,
             'coverUrl' => ReadingCover::url($article->cover_asset ?? null),
             'detailImageUrl' => ReadingCover::url($article->detail_image_asset ?? null),
@@ -328,7 +328,7 @@ class ContentController extends Controller
         $data = $request->validate([
             'slug' => ['nullable', 'string', 'max:100', Rule::unique('reading_items', 'slug')->ignore($id)],
             'title' => 'required|string|max:255', 'translation' => 'nullable|string|max:255',
-            'level' => ['nullable', 'string', 'max:32', Rule::in(array_column(config('reading.levels', []), 'value'))], 'minutes' => 'nullable|integer|min:1|max:65535',
+            'level' => ['nullable', 'string', 'max:32', Rule::exists('reading_levels', 'name')], 'minutes' => 'nullable|integer|min:1|max:65535',
             'chapterNo' => $kind === 'chapter' ? ['required', 'integer', 'min:1', 'max:65535', Rule::unique('reading_items', 'chapter_no')->where(fn ($query) => $query->where('series_id', $seriesId)->where('kind', 'chapter'))->ignore($id)] : 'prohibited',
             'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'detailImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
@@ -705,5 +705,14 @@ class ContentController extends Controller
             ['key' => 'analysis', 'label' => '语法解析', 'passed' => $analysisExists, 'required' => false],
             ['key' => 'questions', 'label' => '阅读理解题', 'passed' => $questionCount > 0, 'required' => false, 'detail' => $questionCount ? $questionCount.' 道' : null],
         ];
+    }
+
+    private function readingLevelOptions(): array
+    {
+        return DB::table('reading_levels')->orderBy('sort_order')->orderBy('id')->get()->map(fn (object $level): array => [
+            'value' => $level->name,
+            'label' => $level->name.($level->is_active ? '' : '（已停用）'),
+            'disabled' => ! (bool) $level->is_active,
+        ])->all();
     }
 }

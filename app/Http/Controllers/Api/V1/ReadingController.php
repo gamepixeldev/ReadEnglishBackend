@@ -11,6 +11,15 @@ use Illuminate\Support\Facades\DB;
 
 class ReadingController extends Controller
 {
+    public function levels(): JsonResponse
+    {
+        return response()->json(['items' => DB::table('reading_levels')->where('is_active', true)
+            ->orderBy('sort_order')->orderBy('id')->get(['name'])->map(fn (object $level): array => [
+                'value' => $level->name,
+                'label' => $level->name,
+            ])]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([

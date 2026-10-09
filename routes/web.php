@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Admin\AuthController;
 use App\Http\Controllers\Admin\ContentController;
+use App\Http\Controllers\Admin\ReadingLevelController;
 
 Route::get('/', function () {
     return response()->json(['service' => 'EnglishStudyAPI']);
@@ -23,6 +24,10 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::get('/series/{seriesId}/chapters/create', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->name('admin.series.chapters.create');
     Route::get('/series/{seriesId}/chapters/{id}/edit', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.edit');
     Route::get('/words', [ContentController::class, 'words'])->name('admin.words.index');
+    Route::get('/reading-levels', [ReadingLevelController::class, 'index'])->name('admin.reading-levels.index');
+    Route::post('/reading-levels', [ReadingLevelController::class, 'store'])->name('admin.reading-levels.store');
+    Route::post('/reading-levels/{id}/toggle', [ReadingLevelController::class, 'toggle'])->whereNumber('id')->name('admin.reading-levels.toggle');
+    Route::post('/reading-levels/{id}/move/{direction}', [ReadingLevelController::class, 'move'])->whereNumber('id')->name('admin.reading-levels.move');
     Route::get('/words/create', [ContentController::class, 'wordForm'])->name('admin.words.create');
     Route::get('/words/{id}/edit', [ContentController::class, 'wordForm'])->whereNumber('id')->name('admin.words.edit');
     Route::get('/password', [ContentController::class, 'passwordForm'])->name('admin.password');

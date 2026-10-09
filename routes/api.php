@@ -30,6 +30,7 @@ Route::prefix('v1')->group(function (): void {
     });
 
     Route::get('reading-items', [ReadingController::class, 'index']);
+    Route::get('reading-levels', [ReadingController::class, 'levels']);
     Route::get('reading-items/{id}', [ReadingController::class, 'show']);
     Route::get('reading-items/{id}/words', [ReadingController::class, 'words']);
     Route::get('reading-items/{id}/grammar-analysis', [ReadingController::class, 'grammarAnalysis']);
