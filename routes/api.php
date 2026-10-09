@@ -21,6 +21,7 @@ Route::prefix('v1')->group(function (): void {
         Route::post('auth/avatar', [MobileAuthController::class, 'uploadAvatar']);
         Route::post('auth/logout', [MobileAuthController::class, 'logout']);
         Route::get('me/study-progress', [StudyProgressController::class, 'index']);
+        Route::delete('me/recent-activity', [StudyProgressController::class, 'clearRecent']);
         Route::post('me/reading-completions', [StudyProgressController::class, 'completeReading']);
         Route::post('me/word-learning-events', [StudyProgressController::class, 'completeWord']);
         Route::put('me/word-favorites/{id}', [StudyProgressController::class, 'favoriteWord']);

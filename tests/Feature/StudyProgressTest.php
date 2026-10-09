@@ -43,6 +43,9 @@ class StudyProgressTest extends TestCase
         $this->assertSame(1, DB::table('reading_completions')->where('user_id', $user->id)->count());
         $this->getJson('/api/v1/me/study-progress', $headers)->assertOk()
             ->assertJsonPath('readingIds.0', $id)->assertJsonPath('recent.0.category', 'reading');
+        $this->deleteJson('/api/v1/me/recent-activity', [], $headers)->assertOk();
+        $this->getJson('/api/v1/me/study-progress', $headers)->assertJsonCount(0, 'recent')
+            ->assertJsonPath('readingIds.0', $id);
         [, $otherHeaders] = $this->mobileSession();
         $this->getJson('/api/v1/me/study-progress', $otherHeaders)->assertOk()->assertJsonCount(0, 'readingIds');
     }

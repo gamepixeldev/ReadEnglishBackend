@@ -16,6 +16,16 @@ class StudyProgressController extends Controller
         $readingIds = DB::table('reading_completions')->where('user_id', $userId)->pluck('reading_item_id');
         $wordIds = DB::table('word_learning_events')->where('user_id', $userId)->distinct()->pluck('word_id');
         $favoriteIds = DB::table('word_favorites')->where('user_id', $userId)->pluck('word_id');
+        $allWordIds = $wordIds->concat($favoriteIds)->unique()->values();
+        $wordNames = DB::table('words')->whereIn('id', $allWordIds)->pluck('headword', 'id');
+        $wordSummaries = DB::table('words')->whereIn('id', $allWordIds)
+            ->select('id', 'headword', 'part_of_speech', 'meaning')->get()
+            ->mapWithKeys(fn ($word) => [$word->id => [
+                'id' => (int) $word->id,
+                'headword' => $word->headword,
+                'partOfSpeech' => $word->part_of_speech,
+                'meaning' => $word->meaning,
+            ]]);
         $puzzles = DB::table('puzzle_progress')->where('user_id', $userId)->get()
             ->mapWithKeys(fn ($row) => [$row->puzzle_set_id => [
                 'cursor' => (int) $row->cursor_next,
@@ -27,22 +37,57 @@ class StudyProgressController extends Controller
             ->where('c.user_id', $userId)
             ->select('p.plan_date', 'c.word_id')->get()
             ->groupBy('plan_date')->map(fn ($rows) => $rows->pluck('word_id')->all());
-        $recent = DB::table('recent_activity')->where('user_id', $userId)
-            ->orderByDesc('last_active_at')->limit(200)->get()
-            ->map(fn ($row) => [
+        $recent = DB::table('recent_activity as a')
+            ->leftJoin('reading_items as r', function ($join): void {
+                $join->on('r.id', '=', 'a.target_id')->where('a.category', '=', 'reading');
+            })
+            ->leftJoin('series as s', 's.id', '=', 'r.series_id')
+            ->leftJoin('words as w', function ($join): void {
+                $join->on('w.id', '=', 'a.target_id')->where('a.category', '=', 'word');
+            })
+            ->leftJoin('grammar_lessons as g', function ($join): void {
+                $join->on('g.id', '=', 'a.target_id')->where('a.category', '=', 'grammar');
+            })
+            ->leftJoin('puzzle_sets as p', function ($join): void {
+                $join->on('p.id', '=', 'a.target_id')->where('a.category', '=', 'puzzle');
+            })
+            ->where('a.user_id', $userId)->orderByDesc('a.last_active_at')
+            ->select('a.category', 'a.target_id', 'a.last_active_at', 'r.kind as reading_kind',
+                'r.title as reading_title', 'r.translation as reading_translation', 'r.series_id',
+                'r.chapter_no', 's.translation as series_translation', 'w.headword',
+                'w.meaning as word_meaning', 'w.part_of_speech', 'g.title as grammar_title',
+                'g.level as grammar_level', 'p.title as puzzle_title', 'p.subtitle as puzzle_subtitle')
+            ->get()->map(fn ($row) => [
                 'category' => $row->category,
                 'targetId' => (int) $row->target_id,
                 'lastActiveAt' => $row->last_active_at,
+                'title' => $row->reading_title ?: ($row->headword ?: ($row->grammar_title ?: $row->puzzle_title)),
+                'subtitle' => $row->category === 'reading'
+                    ? ($row->reading_kind === 'chapter' ? ($row->series_translation ?: '外刊阅读') : ($row->reading_translation ?: '精读文章'))
+                    : ($row->category === 'word' ? trim(($row->part_of_speech ?: '').' '.($row->word_meaning ?: ''))
+                        : ($row->category === 'grammar' ? ($row->grammar_level ?: '语法专题') : $row->puzzle_subtitle)),
+                'readingKind' => $row->reading_kind,
+                'seriesId' => $row->series_id,
+                'chapterNo' => $row->chapter_no,
             ]);
 
         return response()->json([
             'readingIds' => $readingIds,
             'wordIds' => $wordIds,
             'favoriteWordIds' => $favoriteIds,
+            'wordNamesById' => $wordNames,
+            'wordSummariesById' => $wordSummaries,
             'puzzles' => $puzzles,
             'dailyWordIdsByDate' => $daily,
             'recent' => $recent,
         ]);
+    }
+
+    public function clearRecent(Request $request): JsonResponse
+    {
+        DB::table('recent_activity')->where('user_id', $request->user()->id)->delete();
+
+        return response()->json(['cleared' => true]);
     }
 
     public function completeReading(Request $request): JsonResponse
