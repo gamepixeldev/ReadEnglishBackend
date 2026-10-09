@@ -28,6 +28,7 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::get('/series/{seriesId}/chapters/create', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->name('admin.series.chapters.create');
     Route::get('/series/{seriesId}/chapters/{id}/edit', [ContentController::class, 'chapterForm'])->whereNumber('seriesId')->whereNumber('id')->name('admin.series.chapters.edit');
     Route::get('/words', [ContentController::class, 'words'])->name('admin.words.index');
+    Route::post('/words/{id}/daily-plans', [DailyWordPlanController::class, 'addWordFromList'])->whereNumber('id')->name('admin.words.daily-plans.add');
     Route::get('/grammar', [GrammarLessonController::class, 'index'])->name('admin.grammar.index');
     Route::get('/grammar/create', [GrammarLessonController::class, 'form'])->name('admin.grammar.create');
     Route::get('/grammar/{id}/edit', [GrammarLessonController::class, 'form'])->whereNumber('id')->name('admin.grammar.edit');

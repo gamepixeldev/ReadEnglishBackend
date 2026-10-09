@@ -46,11 +46,11 @@ function command(name, value) {
             <div class="form-field"><label>详解形式</label><el-select v-model="form.detailType"><el-option value="richtext" label="富文本详解" /><el-option value="officialAccount" label="公众号文章链接" /></el-select></div>
           </div>
           <section class="sense-editor">
-            <div class="sense-editor-head"><div><strong>词性与简明释义</strong><p>一个词性对应一条释义；同一单词有多种用法时可分别添加。</p></div><el-button @click="addSense">＋ 添加释义</el-button></div>
+            <div class="sense-editor-head"><div><strong>词性与简明释义</strong><p>每条含义单独填写；同一词性可以重复添加多条释义，例如 accident 的两个名词义项。</p></div><el-button @click="addSense">＋ 添加释义</el-button></div>
             <div v-for="(sense, index) in form.senses" :key="sense.key" class="sense-row">
               <span class="sense-order">{{ index + 1 }}</span>
               <div class="form-field"><label>词性</label><el-input v-model="sense.partOfSpeech" placeholder="例如 n. / v. / adj." /></div>
-              <div class="form-field"><label>简明释义 <b class="required-mark">*</b></label><el-input v-model="sense.meaning" placeholder="填写这个词性下的常用含义" /></div>
+              <div class="form-field"><label>第 {{ index + 1 }} 条释义 <b class="required-mark">*</b></label><el-input v-model="sense.meaning" placeholder="只填写一条含义；相近义项也可分开录入" /></div>
               <el-button v-if="form.senses.length > 1" link type="danger" @click="removeSense(index)">删除</el-button>
             </div>
             <small v-if="form.errors.senses" class="form-error">{{ form.errors.senses }}</small>

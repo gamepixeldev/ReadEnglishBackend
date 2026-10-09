@@ -294,9 +294,18 @@ class ContentController extends Controller
         if ($status) $query->where('status', $status);
 
         $wordPage = $query->orderByDesc('updated_at')->orderByDesc('id')->paginate(15)->withQueryString();
-        $sensesByWord = \App\Services\WordSensePresenter::many($wordPage->getCollection()->pluck('id'));
-        $wordPage->getCollection()->transform(function (object $word) use ($sensesByWord): object {
+        $wordIds = $wordPage->getCollection()->pluck('id');
+        $sensesByWord = \App\Services\WordSensePresenter::many($wordIds);
+        $planDatesByWord = DB::table('daily_word_plan_items as i')
+            ->join('daily_word_plans as p', 'p.id', '=', 'i.plan_id')
+            ->whereIn('i.word_id', $wordIds)->orderBy('p.plan_date')
+            ->get(['i.word_id', 'p.plan_date', 'p.status'])
+            ->groupBy('word_id');
+        $wordPage->getCollection()->transform(function (object $word) use ($sensesByWord, $planDatesByWord): object {
             $word->meaning = \App\Services\WordSensePresenter::summary($sensesByWord[$word->id] ?? [], $word->part_of_speech, $word->meaning)['meaning'];
+            $word->daily_plans = ($planDatesByWord[$word->id] ?? collect())->map(fn (object $plan): array => [
+                'date' => $plan->plan_date, 'status' => $plan->status,
+            ])->values();
             return $word;
         });
 

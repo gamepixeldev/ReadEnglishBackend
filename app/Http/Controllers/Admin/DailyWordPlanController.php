@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
@@ -62,6 +63,51 @@ class DailyWordPlanController extends Controller
         });
 
         return response()->json(['items' => $words]);
+    }
+
+    public function addWordFromList(Request $request, int $wordId): RedirectResponse
+    {
+        $data = $request->validate(['planDate' => 'required|date_format:Y-m-d']);
+        if (Carbon::parse($data['planDate'], 'Asia/Shanghai')->startOfDay()->lt(now('Asia/Shanghai')->startOfDay())) {
+            return back()->withErrors(['planDate' => '只能加入今天或之后的计划']);
+        }
+        $word = DB::table('words')->where('id', $wordId)->where('status', 'published')->first();
+        abort_unless($word, 404, '只有已发布的单词可以加入每日计划');
+
+        $result = DB::transaction(function () use ($data, $wordId): array {
+            $plan = DB::table('daily_word_plans')->where('plan_date', $data['planDate'])->lockForUpdate()->first();
+            $created = false;
+            if (! $plan) {
+                $now = now();
+                $planId = DB::table('daily_word_plans')->insertGetId([
+                    'plan_date' => $data['planDate'], 'status' => 'draft',
+                    'created_at' => $now, 'updated_at' => $now,
+                ]);
+                $plan = DB::table('daily_word_plans')->where('id', $planId)->lockForUpdate()->first();
+                $created = true;
+            }
+
+            if (DB::table('daily_word_plan_items')->where('plan_id', $plan->id)->where('word_id', $wordId)->exists()) {
+                return ['message' => '这个单词已在该日期计划中', 'created' => false];
+            }
+            if (DB::table('daily_word_completions')->where('plan_id', $plan->id)->exists()) {
+                return ['error' => '该计划已有用户完成记录，不能再添加单词'];
+            }
+            $count = DB::table('daily_word_plan_items')->where('plan_id', $plan->id)->count();
+            if ($count >= 30) return ['error' => '每日计划最多安排 30 个单词'];
+
+            DB::table('daily_word_plan_items')->insert([
+                'plan_id' => $plan->id, 'word_id' => $wordId, 'sort_order' => $count + 1,
+            ]);
+
+            return [
+                'message' => $created ? '单词已加入新建的草稿计划，请到每日单词页面发布' : '单词已加入每日计划',
+                'created' => $created,
+            ];
+        });
+
+        if (isset($result['error'])) return back()->withErrors(['dailyPlan' => $result['error']]);
+        return back()->with('success', $result['message']);
     }
 
     public function save(Request $request, ?int $id = null): RedirectResponse
