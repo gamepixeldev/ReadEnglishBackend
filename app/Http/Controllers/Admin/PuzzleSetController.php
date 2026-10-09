@@ -57,6 +57,32 @@ class PuzzleSetController extends Controller
         return response()->json(['items' => $items]);
     }
 
+    public function readingSentences(int $id): JsonResponse
+    {
+        $reading = DB::table('reading_items')->where('id', $id)->where('status', 'published')->first();
+        abort_unless($reading, 404, '文章来源不存在或尚未发布');
+
+        $paragraphs = json_decode($reading->body_json, true) ?: [];
+        $sentences = collect($paragraphs)->flatMap(function (array $paragraph): array {
+            $translations = $paragraph['sentenceTranslations'] ?? [];
+
+            return collect($paragraph['sentences'] ?? [])->values()->map(function ($sentence, int $index) use ($translations): ?array {
+                $text = trim((string) $sentence);
+                if ($text === '') return null;
+
+                return [
+                    'answerText' => $text,
+                    'promptCn' => trim((string) ($translations[$index] ?? '')),
+                ];
+            })->filter()->all();
+        })->values();
+
+        return response()->json([
+            'title' => $reading->title,
+            'sentences' => $sentences,
+        ]);
+    }
+
     public function save(Request $request, ?int $id = null): RedirectResponse
     {
         $data = $request->validate([

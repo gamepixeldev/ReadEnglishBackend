@@ -42,6 +42,7 @@ Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function ()
     Route::get('/puzzles', [PuzzleSetController::class, 'index'])->name('admin.puzzles.index');
     Route::get('/puzzles/create', [PuzzleSetController::class, 'form'])->name('admin.puzzles.create');
     Route::get('/puzzles/reading-options', [PuzzleSetController::class, 'readingOptions'])->name('admin.puzzles.reading-options');
+    Route::get('/puzzles/readings/{id}/sentences', [PuzzleSetController::class, 'readingSentences'])->whereNumber('id')->name('admin.puzzles.reading-sentences');
     Route::get('/puzzles/{id}/edit', [PuzzleSetController::class, 'form'])->whereNumber('id')->name('admin.puzzles.edit');
     Route::post('/puzzles', [PuzzleSetController::class, 'save'])->name('admin.puzzles.store');
     Route::put('/puzzles/{id}', [PuzzleSetController::class, 'save'])->whereNumber('id')->name('admin.puzzles.update');
