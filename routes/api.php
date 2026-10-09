@@ -1,16 +1,23 @@
 <?php
 
 use App\Http\Controllers\Api\V1\GrammarController;
+use App\Http\Controllers\Api\V1\MobileAuthController;
 use App\Http\Controllers\Api\V1\ContentAdminController;
 use App\Http\Controllers\Api\V1\PuzzleController;
 use App\Http\Controllers\Api\V1\ReadingController;
 use App\Http\Controllers\Api\V1\WordController;
 use App\Http\Middleware\RequireContentAdminToken;
+use App\Http\Middleware\AuthenticateMobileToken;
 use Illuminate\Support\Facades\Route;
 
 Route::pattern('id', '[0-9]+');
 
 Route::prefix('v1')->group(function (): void {
+    Route::post('auth/wechat', [MobileAuthController::class, 'wechat'])->middleware('throttle:10,1');
+    Route::middleware(AuthenticateMobileToken::class)->group(function (): void {
+        Route::get('auth/me', [MobileAuthController::class, 'me']);
+        Route::post('auth/logout', [MobileAuthController::class, 'logout']);
+    });
     Route::prefix('admin')->middleware(RequireContentAdminToken::class)->group(function (): void {
         Route::get('reading-items', [ContentAdminController::class, 'readings']);
         Route::post('reading-items', [ContentAdminController::class, 'createReading']);
