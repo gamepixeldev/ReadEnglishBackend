@@ -4,14 +4,15 @@ import { Link, router, useForm } from '@inertiajs/vue3'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import AdminLayout from '../../../Layouts/AdminLayout.vue'
 
-const props = defineProps({ set: Object, sentences: Array, readings: Array })
+const props = defineProps({ set: Object, sentences: Array, readings: Array, coverUrl: String })
 const editing = Boolean(props.set)
+const coverPreview = ref(props.coverUrl || '')
 let nextKey = 0
 function newSentence(source = {}) { return { key: ++nextKey, promptCn: source.promptCn || source.prompt_cn || '', answerText: source.answerText || source.answer_text || '' } }
 const form = useForm({
   title: props.set?.title || '', subtitle: props.set?.subtitle || '',
   iconAsset: props.set?.icon_asset || '', sourceReadingItemId: props.set?.source_reading_item_id || null,
-  sortOrder: props.set?.sort_order ?? 0,
+  sortOrder: props.set?.sort_order ?? 0, coverImage: null,
   sentences: props.sentences?.length ? props.sentences.map(newSentence) : [newSentence()]
 })
 const readingOptions = ref([...(props.readings || [])])
@@ -63,7 +64,8 @@ async function sourceChanged(readingId) {
 const expanded = ref(form.sentences.map(sentence => sentence.key))
 function addSentence() { const sentence = newSentence(); form.sentences.push(sentence); expanded.value.push(sentence.key) }
 function removeSentence(index) { if (form.sentences.length > 1) form.sentences.splice(index, 1) }
-function save() { form.submit(editing ? 'put' : 'post', editing ? `/admin/puzzles/${props.set.id}` : '/admin/puzzles') }
+function save() { form.submit(editing ? 'put' : 'post', editing ? `/admin/puzzles/${props.set.id}` : '/admin/puzzles', { forceFormData: true }) }
+function coverChanged(upload) { const file = upload.raw; if (!file) return; coverPreview.value = URL.createObjectURL(file); form.coverImage = file }
 function toggle() { router.post(`/admin/puzzles/${props.set.id}/toggle`) }
 </script>
 
@@ -74,6 +76,7 @@ function toggle() { router.post(`/admin/puzzles/${props.set.id}/toggle`) }
       <section class="card"><div class="card-header"><div><h2>拼句集合</h2><p>不选来源文章就是独立练习；选择精读文章后会自动导入句子，可继续编辑。</p></div></div><div class="card-body"><div class="form-grid">
         <div class="form-field wide"><label>标题 <b class="required-mark">*</b></label><el-input v-model="form.title" /></div>
         <div class="form-field wide"><label>副标题</label><el-input v-model="form.subtitle" /></div>
+        <div class="form-field wide"><label>拼句封面（选填）</label><div class="cover-upload"><div class="cover-preview square"><img v-if="coverPreview" :src="coverPreview" alt="拼句封面预览"><span v-else>标题字封面</span></div><div class="cover-upload-controls"><el-upload :auto-upload="false" :show-file-list="false" accept="image/jpeg,image/png,image/webp" :on-change="coverChanged"><el-button>选择封面</el-button></el-upload><p class="form-hint">不上传时，最近学习中会用标题首字生成封面。最大 4 MB。</p></div></div><small v-if="form.errors.coverImage" class="form-error">{{ form.errors.coverImage }}</small></div>
         <div class="form-field"><label>图标字符</label><el-input v-model="form.iconAsset" maxlength="8" placeholder="例如：✦" /></div>
         <div class="form-field"><label>列表顺序</label><el-input v-model.number="form.sortOrder" type="number" min="0" /></div>
         <div class="form-field wide"><label>来源文章（选填）</label><el-select v-model="form.sourceReadingItemId" clearable filterable remote :remote-method="searchReadings" :loading="readingLoading" placeholder="搜索文章标题；不选则为独立练习" @change="sourceChanged"><el-option v-for="reading in readingOptions" :key="reading.id" :label="`${reading.translation || reading.title} · #${reading.id}`" :value="reading.id" /></el-select></div>

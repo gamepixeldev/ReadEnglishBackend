@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Support\ReadingCover;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -42,7 +43,9 @@ class PuzzleSetController extends Controller
             if ($source) $readings->prepend($source);
         }
 
-        return Inertia::render('Admin/Puzzles/Form', compact('set', 'sentences', 'readings'));
+        $coverUrl = ReadingCover::url($set->cover_asset ?? null);
+
+        return Inertia::render('Admin/Puzzles/Form', compact('set', 'sentences', 'readings', 'coverUrl'));
     }
 
     public function readingOptions(Request $request): JsonResponse
@@ -89,6 +92,7 @@ class PuzzleSetController extends Controller
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'iconAsset' => 'nullable|string|max:255',
+            'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'sourceReadingItemId' => ['nullable', 'integer', Rule::exists('reading_items', 'id')->where('status', 'published')],
             'sortOrder' => 'nullable|integer|min:0|max:4294967295',
             'sentences' => 'required|array|min:1|max:200',
@@ -109,11 +113,18 @@ class PuzzleSetController extends Controller
             }
         }
 
-        DB::transaction(function () use ($data, &$id): void {
+        $coverAsset = $id ? DB::table('puzzle_sets')->where('id', $id)->value('cover_asset') : null;
+        if ($request->hasFile('coverImage')) {
+            $coverAsset = $request->file('coverImage')->store('puzzle-covers', 'public');
+            if (! $coverAsset) abort(500, '封面保存失败');
+        }
+
+        DB::transaction(function () use ($data, $coverAsset, &$id): void {
             $now = now();
             $row = [
                 'title' => trim($data['title']), 'subtitle' => $data['subtitle'] ?? null,
                 'icon_asset' => $data['iconAsset'] ?? null,
+                'cover_asset' => $coverAsset,
                 'source_reading_item_id' => $data['sourceReadingItemId'] ?? null,
                 'sort_order' => $data['sortOrder'] ?? 0, 'updated_at' => $now,
             ];

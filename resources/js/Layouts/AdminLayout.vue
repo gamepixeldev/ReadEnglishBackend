@@ -29,6 +29,8 @@ function closeSidebar() { document.body.classList.remove('sidebar-open'); }
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/ReadingLevels')}" href="/admin/reading-levels"><span class="nav-icon">≡</span>阅读级别</Link>
         <Link class="nav-item" :class="{active: $page.component.startsWith('Admin/GrammarLevels')}" href="/admin/grammar-levels"><span class="nav-icon">≡</span>语法级别</Link>
       </nav>
+      <div class="nav-section">用户服务</div>
+      <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Feedback')}" href="/admin/feedback"><span class="nav-icon">✉</span>用户反馈</Link></nav>
       <div class="nav-section">账号</div>
       <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component === 'Admin/Password'}" href="/admin/password"><span class="nav-icon">⚙</span>修改密码</Link></nav>
       <div class="sidebar-bottom"><span class="online-dot"></span> 管理服务运行中</div>

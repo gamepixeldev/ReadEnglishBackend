@@ -32,7 +32,7 @@
     <section class="card"><div class="card-header"><h2>发布状态</h2></div><div class="card-body">@if($editing)<p><span class="status {{ $word->status }}">{{ $word->status === 'published' ? '已发布' : '草稿' }}</span></p><p class="helper">发布后，该单词可被精读文章和每日学习引用。</p>
         @if($word->status === 'published')<form method="post" action="{{ route('admin.word.unpublish', $word->id) }}">@csrf<button class="btn danger" type="submit">下架单词</button></form>@else<form method="post" action="{{ route('admin.word.publish', $word->id) }}">@csrf<button class="btn" type="submit">发布单词</button></form>@endif
         @else<p class="helper">保存后默认为草稿。</p>@endif</div></section>
-    @if($editing)<section class="card"><div class="card-header"><h2>单词信息</h2></div><div class="card-body"><div class="helper">ID：#{{ $word->id }}</div><div class="helper" style="margin-top:8px">最后更新：{{ $word->updated_at }}</div></div></section>@endif
+    @if($editing)<section class="card"><div class="card-header"><h2>单词信息</h2></div><div class="card-body"><div class="helper">ID：#{{ $word->id }}</div><div class="helper" style="margin-top:8px">最后更新：{{ \Illuminate\Support\Carbon::parse($word->updated_at, 'UTC')->setTimezone('Asia/Shanghai')->format('Y-m-d H:i:s') }}</div></div></section>@endif
 </aside></div>
 @endsection
 @push('scripts')<script src="{{ asset('admin-assets/editor.js') }}" defer></script>@endpush

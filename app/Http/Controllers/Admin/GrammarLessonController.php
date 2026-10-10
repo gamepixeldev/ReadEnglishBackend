@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Services\HtmlContentSanitizer;
+use App\Support\ReadingCover;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,7 +49,9 @@ class GrammarLessonController extends Controller
         }
         $levels = DB::table('grammar_levels')->orderBy('sort_order')->orderBy('id')->get(['name', 'is_active']);
 
-        return Inertia::render('Admin/Grammar/Form', compact('lesson', 'content', 'questions', 'levels'));
+        $coverUrl = ReadingCover::url($lesson->cover_asset ?? null);
+
+        return Inertia::render('Admin/Grammar/Form', compact('lesson', 'content', 'questions', 'levels', 'coverUrl'));
     }
 
     public function save(Request $request, HtmlContentSanitizer $sanitizer, ?int $id = null): RedirectResponse
@@ -59,6 +62,7 @@ class GrammarLessonController extends Controller
         $data = $request->validate([
             'title' => 'required|string|max:255',
             'summary' => 'nullable|string|max:10000',
+            'coverImage' => 'nullable|image|mimes:jpeg,png,webp|max:4096',
             'level' => ['required', 'string', 'max:32', $levelRule],
             'sortOrder' => 'nullable|integer|min:0|max:4294967295',
             'contentType' => ['required', Rule::in(['richtext', 'officialAccount'])],
@@ -67,7 +71,7 @@ class GrammarLessonController extends Controller
             'contentUrl' => 'required_if:contentType,officialAccount|nullable|url|max:2048',
             'contentTitle' => 'nullable|string|max:255',
             'contentSummary' => 'nullable|string|max:10000',
-            'questions' => 'required|array|min:1|max:100',
+            'questions' => 'present|array|max:100',
             'questions.*.kind' => ['required', Rule::in(['choice', 'fill'])],
             'questions.*.prompt' => 'required|string|max:10000',
             'questions.*.options' => 'nullable|array',
@@ -96,11 +100,17 @@ class GrammarLessonController extends Controller
         }
         if ($id) abort_unless(DB::table('grammar_lessons')->where('id', $id)->exists(), 404);
 
-        DB::transaction(function () use ($data, $html, $format, &$id): void {
+        $coverAsset = $id ? DB::table('grammar_lessons')->where('id', $id)->value('cover_asset') : null;
+        if ($request->hasFile('coverImage')) {
+            $coverAsset = $request->file('coverImage')->store('grammar-covers', 'public');
+            if (! $coverAsset) abort(500, '封面保存失败');
+        }
+
+        DB::transaction(function () use ($data, $html, $format, $coverAsset, &$id): void {
             $now = now();
             $row = [
                 'title' => trim($data['title']), 'summary' => $data['summary'] ?? null,
-                'level' => $data['level'], 'sort_order' => $data['sortOrder'] ?? 0,
+                'level' => $data['level'], 'cover_asset' => $coverAsset, 'sort_order' => $data['sortOrder'] ?? 0,
                 'updated_at' => $now,
             ];
             if ($id) DB::table('grammar_lessons')->where('id', $id)->update($row);
@@ -138,9 +148,8 @@ class GrammarLessonController extends Controller
     {
         $lesson = DB::table('grammar_lessons')->where('id', $id)->first();
         abort_unless($lesson, 404);
-        if ($lesson->status !== 'published' && (! DB::table('grammar_lesson_contents')->where('grammar_lesson_id', $id)->exists()
-            || ! DB::table('grammar_questions')->where('grammar_lesson_id', $id)->exists())) {
-            return back()->withErrors(['publish' => '发布前请完成语法正文和至少一道题']);
+        if ($lesson->status !== 'published' && ! DB::table('grammar_lesson_contents')->where('grammar_lesson_id', $id)->exists()) {
+            return back()->withErrors(['publish' => '发布前请完成语法正文']);
         }
         $status = $lesson->status === 'published' ? 'draft' : 'published';
         DB::transaction(function () use ($id, $status): void {

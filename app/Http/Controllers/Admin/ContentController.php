@@ -32,12 +32,33 @@ class ContentController extends Controller
 
     public function dashboard(): InertiaResponse
     {
+        $today = now('Asia/Shanghai')->toDateString();
+        $regularUsers = DB::table('users')->where('is_admin', false);
+
         return Inertia::render('Admin/Dashboard', [
             'articleCount' => DB::table('reading_items')->where('kind', 'article')->count(),
             'publishedArticles' => DB::table('reading_items')->where('kind', 'article')->where('status', 'published')->count(),
             'wordCount' => DB::table('words')->count(),
             'publishedWords' => DB::table('words')->where('status', 'published')->count(),
-            'userCount' => DB::table('users')->where('is_admin', false)->count(),
+            'seriesCount' => DB::table('series')->count(),
+            'publishedSeries' => DB::table('series')->where('status', 'published')->count(),
+            'chapterCount' => DB::table('reading_items')->where('kind', 'chapter')->count(),
+            'publishedChapters' => DB::table('reading_items')->where('kind', 'chapter')->where('status', 'published')->count(),
+            'grammarCount' => DB::table('grammar_lessons')->count(),
+            'publishedGrammar' => DB::table('grammar_lessons')->where('status', 'published')->count(),
+            'puzzleCount' => DB::table('puzzle_sets')->count(),
+            'publishedPuzzles' => DB::table('puzzle_sets')->where('status', 'published')->count(),
+            'dailyPlanCount' => DB::table('daily_word_plans')->count(),
+            'publishedDailyPlans' => DB::table('daily_word_plans')->where('status', 'published')->count(),
+            'userCount' => (clone $regularUsers)->count(),
+            'newUsersThisMonth' => (clone $regularUsers)->where('created_at', '>=', now('Asia/Shanghai')->startOfMonth())->count(),
+            'activeUsersToday' => DB::table('recent_activity')->whereDate('last_active_at', $today)->distinct()->count('user_id'),
+            'readingCompletions' => DB::table('reading_completions')->count(),
+            'readingCompletionsToday' => DB::table('reading_completions')->whereDate('completed_at', $today)->count(),
+            'wordLearningEvents' => DB::table('word_learning_events')->count(),
+            'wordLearningEventsToday' => DB::table('word_learning_events')->whereDate('completed_at', $today)->count(),
+            'puzzlesCompleted' => DB::table('puzzle_progress')->whereNotNull('completed_at')->count(),
+            'puzzlesInProgress' => DB::table('puzzle_progress')->whereNull('completed_at')->where('cursor_next', '>', 0)->count(),
             'latestArticles' => DB::table('reading_items')->where('kind', 'article')->orderByDesc('updated_at')->orderByDesc('id')->limit(5)->get(),
             'latestWords' => DB::table('words')->orderByDesc('updated_at')->orderByDesc('id')->limit(5)->get(),
         ]);
@@ -433,27 +454,33 @@ class ContentController extends Controller
         $article = $this->editableReadingItem($id);
         abort_unless($article, 404);
         $data = $request->validate([
-            'type' => 'required|in:richtext,officialAccount',
+            'type' => 'sometimes|in:richtext,officialAccount',
             'format' => 'required|in:html,markdown',
-            'html' => 'required_if:type,richtext|nullable|string|max:1000000',
-            'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
+            'html' => 'nullable|string|max:1000000',
+            'url' => 'nullable|url|max:2048',
             'title' => 'nullable|string|max:255', 'summary' => 'nullable|string|max:10000',
         ]);
         $source = $data['html'] ?? '';
-        $format = $data['type'] === 'richtext' ? $data['format'] : 'html';
-        $html = $data['type'] === 'richtext'
+        $hasHtml = trim($source) !== '';
+        $hasUrl = trim((string) ($data['url'] ?? '')) !== '';
+        if (! $hasHtml && ! $hasUrl) {
+            return back()->withErrors(['html' => '请填写解析正文或公众号文章链接'])->withInput();
+        }
+        $format = $hasHtml ? $data['format'] : 'html';
+        $html = $hasHtml
             ? ($format === 'markdown' ? $sanitizer->clean(Str::markdown($source)) : $sanitizer->clean($source))
             : null;
-        if ($data['type'] === 'richtext' && trim(strip_tags((string) $html)) === '') {
+        if ($hasHtml && trim(strip_tags((string) $html)) === '') {
             return back()->withErrors(['html' => '清理后没有可显示的正文内容'])->withInput();
         }
+        $type = $hasHtml ? 'richtext' : 'officialAccount';
 
         $now = now();
         $exists = DB::table('reading_analyses')->where('reading_item_id', $id)->exists();
         DB::table('reading_analyses')->updateOrInsert(['reading_item_id' => $id], [
-            'type' => $data['type'], 'format' => $format,
-            'html' => $data['type'] === 'richtext' && $format === 'markdown' ? $source : $html,
-            'url' => $data['url'] ?? null,
+            'type' => $type, 'format' => $format,
+            'html' => $hasHtml && $format === 'markdown' ? $source : $html,
+            'url' => $hasUrl ? $data['url'] : null,
             'title' => $data['title'] ?? null, 'summary' => $data['summary'] ?? null,
             'status' => $article->status === 'published' ? 'published' : 'draft', 'updated_at' => $now,
         ] + ($exists ? [] : ['created_at' => $now]));

@@ -161,32 +161,37 @@ class ContentAdminController extends Controller
     {
         if (! DB::table('reading_items')->where('id', $id)->exists()) return $this->notFound();
         $data = $request->validate([
-            'type' => 'required|in:richtext,officialAccount',
+            'type' => 'sometimes|in:richtext,officialAccount',
             'format' => 'sometimes|in:html,markdown',
-            'html' => 'required_if:type,richtext|nullable|string|max:1000000',
-            'url' => 'required_if:type,officialAccount|nullable|url|max:2048',
+            'html' => 'nullable|string|max:1000000',
+            'url' => 'nullable|url|max:2048',
             'title' => 'nullable|string|max:255',
             'summary' => 'nullable|string|max:10000',
         ]);
         $format = $data['format'] ?? 'html';
-        if ($data['type'] !== 'richtext') $format = 'html';
         $sourceContent = $data['html'] ?? '';
-        if ($data['type'] === 'richtext') {
+        $hasHtml = trim($sourceContent) !== '';
+        $hasUrl = trim((string) ($data['url'] ?? '')) !== '';
+        if (! $hasHtml && ! $hasUrl) {
+            return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '请填写解析正文或公众号文章链接']], 422);
+        }
+        if ($hasHtml) {
             $sanitizer = app(HtmlContentSanitizer::class);
             $data['html'] = $format === 'markdown'
                 ? $sanitizer->clean(\Illuminate\Support\Str::markdown($sourceContent))
                 : $sanitizer->clean($sourceContent);
         }
-        if ($data['type'] === 'richtext' && trim(strip_tags($data['html'])) === '') {
+        if ($hasHtml && trim(strip_tags($data['html'])) === '') {
             return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '富文本清理后没有可显示的内容']], 422);
         }
+        $data['type'] = $hasHtml ? 'richtext' : 'officialAccount';
 
         $now = now();
         $analysisStatus = DB::table('reading_items')->where('id', $id)->value('status') === 'published' ? 'published' : 'draft';
         DB::table('reading_analyses')->updateOrInsert(['reading_item_id' => $id], [
             'type' => $data['type'], 'format' => $format,
-            'html' => $data['type'] === 'richtext' && $format === 'markdown' ? $sourceContent : ($data['html'] ?? null),
-            'url' => $data['url'] ?? null,
+            'html' => $hasHtml ? ($format === 'markdown' ? $sourceContent : $data['html']) : null,
+            'url' => $hasUrl ? $data['url'] : null,
             'title' => $data['title'] ?? null, 'summary' => $data['summary'] ?? null,
             'status' => $analysisStatus, 'updated_at' => $now,
         ] + (DB::table('reading_analyses')->where('reading_item_id', $id)->exists() ? [] : ['created_at' => $now]));

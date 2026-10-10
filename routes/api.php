@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\ReadingController;
 use App\Http\Controllers\Api\V1\WordController;
 use App\Http\Controllers\Api\V1\StudyProgressController;
 use App\Http\Controllers\Api\V1\DailyWordController;
+use App\Http\Controllers\Api\V1\FeedbackController;
+use App\Http\Controllers\Api\V1\PracticeAttemptController;
 use App\Http\Middleware\RequireContentAdminToken;
 use App\Http\Middleware\AuthenticateMobileToken;
 use Illuminate\Support\Facades\Route;
@@ -16,6 +18,9 @@ Route::pattern('id', '[0-9]+');
 
 Route::prefix('v1')->group(function (): void {
     Route::post('auth/wechat', [MobileAuthController::class, 'wechat'])->middleware('throttle:10,1');
+    Route::post('feedback', [FeedbackController::class, 'store'])->middleware('throttle:5,1');
+    Route::post('feedback/mine', [FeedbackController::class, 'mine'])->middleware('throttle:30,1');
+    Route::post('feedback/{id}/mine', [FeedbackController::class, 'showMine'])->whereNumber('id')->middleware('throttle:30,1');
     Route::middleware(AuthenticateMobileToken::class)->group(function (): void {
         Route::get('auth/me', [MobileAuthController::class, 'me']);
         Route::patch('auth/profile', [MobileAuthController::class, 'updateProfile']);
@@ -29,6 +34,10 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('me/word-favorites/{id}', [StudyProgressController::class, 'unfavoriteWord']);
         Route::put('me/puzzle-progress/{id}', [StudyProgressController::class, 'savePuzzle']);
         Route::post('me/grammar-activity/{id}', [StudyProgressController::class, 'openGrammar']);
+        Route::get('me/practice-attempts', [PracticeAttemptController::class, 'index']);
+        Route::post('me/practice-attempts', [PracticeAttemptController::class, 'store']);
+        Route::get('me/practice-attempts/{id}', [PracticeAttemptController::class, 'show']);
+        Route::post('me/practice-attempts/{id}/answers', [PracticeAttemptController::class, 'answer']);
     });
     Route::prefix('admin')->middleware(RequireContentAdminToken::class)->group(function (): void {
         Route::get('reading-items', [ContentAdminController::class, 'readings']);
@@ -59,6 +68,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('series/{id}', [ReadingController::class, 'seriesShow']);
     Route::get('words/{id}', [WordController::class, 'show']);
     Route::get('daily-words/today', [DailyWordController::class, 'today']);
+    Route::get('grammar-levels', [GrammarController::class, 'levels']);
     Route::get('grammar-lessons', [GrammarController::class, 'index']);
     Route::get('grammar-lessons/{id}', [GrammarController::class, 'show']);
     Route::get('grammar-lessons/{id}/questions', [GrammarController::class, 'questions']);

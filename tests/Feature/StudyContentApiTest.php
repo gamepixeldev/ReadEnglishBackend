@@ -79,6 +79,26 @@ class StudyContentApiTest extends TestCase
             ->assertJsonPath('html', '<p>解析</p>');
     }
 
+    public function test_reading_analysis_can_return_richtext_and_official_account_link_together(): void
+    {
+        $articleId = $this->reading('hybrid-analysis', 'published', 1);
+        DB::table('reading_analyses')->insert([
+            'reading_item_id' => $articleId,
+            'type' => 'richtext',
+            'format' => 'html',
+            'html' => '<p>小程序内语法讲解</p>',
+            'url' => 'https://mp.weixin.qq.com/s/example',
+            'title' => '公众号原文标题',
+            'summary' => '原文摘要',
+            'status' => 'published',
+        ]);
+
+        $this->getJson('/api/v1/reading-items/'.$articleId.'/grammar-analysis')->assertOk()
+            ->assertJsonPath('html', '<p>小程序内语法讲解</p>')
+            ->assertJsonPath('url', 'https://mp.weixin.qq.com/s/example')
+            ->assertJsonPath('title', '公众号原文标题');
+    }
+
     public function test_analysis_of_draft_article_is_not_exposed(): void
     {
         $draftId = $this->reading('draft', 'draft', 1);

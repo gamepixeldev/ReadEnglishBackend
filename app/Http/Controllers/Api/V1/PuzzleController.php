@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -93,6 +94,7 @@ class PuzzleController extends Controller
             'id' => $set->id,
             'title' => $set->title,
             'subtitle' => $set->subtitle,
+            'coverUrl' => ReadingCover::url($set->cover_asset),
             'iconAsset' => $set->icon_asset,
             'sourceReadingItemId' => $set->source_reading_item_id,
             'sentenceCount' => DB::table('puzzle_sentences')->where('puzzle_set_id', $set->id)->count(),

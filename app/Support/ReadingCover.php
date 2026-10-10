@@ -8,7 +8,7 @@ class ReadingCover
 {
     public static function url(?string $asset): ?string
     {
-        if (! $asset || ! preg_match('~\A(?:article-covers|article-detail-images|series-covers)/[a-zA-Z0-9._-]+\z~', $asset)) {
+        if (! $asset || ! preg_match('~\A(?:article-covers|article-detail-images|series-covers|grammar-covers|puzzle-covers)/[a-zA-Z0-9._-]+\z~', $asset)) {
             return null;
         }
 

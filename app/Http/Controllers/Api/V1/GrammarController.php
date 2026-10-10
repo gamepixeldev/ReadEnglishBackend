@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\HtmlContentSanitizer;
+use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -11,6 +12,15 @@ use Illuminate\Support\Str;
 
 class GrammarController extends Controller
 {
+    public function levels(): JsonResponse
+    {
+        return response()->json(['items' => DB::table('grammar_levels')->where('is_active', true)
+            ->orderBy('sort_order')->orderBy('id')->get(['name'])->map(fn (object $level): array => [
+                'value' => $level->name,
+                'label' => $level->name,
+            ])]);
+    }
+
     public function index(Request $request): JsonResponse
     {
         $filters = $request->validate([
@@ -31,6 +41,7 @@ class GrammarController extends Controller
                 'title' => $lesson->title,
                 'summary' => $lesson->summary,
                 'level' => $lesson->level,
+                'coverUrl' => ReadingCover::url($lesson->cover_asset),
             ])->all(),
             'nextCursor' => $page->nextCursor()?->encode(),
         ]);
@@ -51,6 +62,8 @@ class GrammarController extends Controller
             'title' => $lesson->title,
             'summary' => $lesson->summary,
             'level' => $lesson->level,
+            'coverUrl' => ReadingCover::url($lesson->cover_asset),
+            'questionCount' => DB::table('grammar_questions')->where('grammar_lesson_id', $id)->count(),
             'contentSource' => $content ? [
                 'type' => $content->type,
                 'html' => $content->type === 'richtext' ? $sanitizer->clean(($content->format ?? 'html') === 'markdown' ? Str::markdown($content->html ?? '') : $content->html) : null,

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Services\WordSensePresenter;
+use App\Support\ReadingCover;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -59,13 +60,21 @@ class StudyProgressController extends Controller
             ->where('a.user_id', $userId)->orderByDesc('a.last_active_at')
             ->select('a.category', 'a.target_id', 'a.last_active_at', 'r.kind as reading_kind',
                 'r.title as reading_title', 'r.translation as reading_translation', 'r.series_id',
-                'r.chapter_no', 's.translation as series_translation', 'w.headword',
+                'r.chapter_no', 'r.cover_asset as reading_cover_asset', 's.translation as series_translation',
+                's.cover_asset as series_cover_asset', 'w.headword',
                 'w.meaning as word_meaning', 'w.part_of_speech', 'g.title as grammar_title',
-                'g.level as grammar_level', 'p.title as puzzle_title', 'p.subtitle as puzzle_subtitle')
+                'g.level as grammar_level', 'g.cover_asset as grammar_cover_asset',
+                'p.title as puzzle_title', 'p.subtitle as puzzle_subtitle', 'p.cover_asset as puzzle_cover_asset')
             ->get()->map(fn ($row) => [
                 'category' => $row->category,
                 'targetId' => (int) $row->target_id,
                 'lastActiveAt' => $row->last_active_at,
+                'coverUrl' => ReadingCover::url(match ($row->category) {
+                    'reading' => $row->reading_cover_asset ?: $row->series_cover_asset,
+                    'grammar' => $row->grammar_cover_asset,
+                    'puzzle' => $row->puzzle_cover_asset,
+                    default => null,
+                }),
                 'title' => $row->reading_title ?: ($row->headword ?: ($row->grammar_title ?: $row->puzzle_title)),
                 'subtitle' => $row->category === 'reading'
                     ? ($row->reading_kind === 'chapter' ? ($row->series_translation ?: '外刊阅读') : ($row->reading_translation ?: '精读文章'))
@@ -101,7 +110,12 @@ class StudyProgressController extends Controller
     {
         $input = $request->validate(['readingItemId' => ['required', 'integer', 'min:1']]);
         $id = (int) $input['readingItemId'];
-        if (! DB::table('reading_items')->where('id', $id)->where('status', 'published')->exists()) {
+        if (! DB::table('reading_items')->where('id', $id)->where('status', 'published')
+            ->where(function ($query): void {
+                $query->where('kind', '!=', 'chapter')->orWhereExists(function ($series): void {
+                    $series->selectRaw('1')->from('series')->whereColumn('series.id', 'reading_items.series_id')->where('series.status', 'published');
+                });
+            })->exists()) {
             return $this->notFound();
         }
         $userId = $request->user()->id;

@@ -3,6 +3,7 @@ import { Link, router, useForm } from '@inertiajs/vue3'
 import { computed, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import AdminLayout from '../../../Layouts/AdminLayout.vue'
+import { formatBeijingDateTime } from '../../../utils/date-time.js'
 
 const props = defineProps({ words: Object, search: String, status: String, availableDailyPlans: Array })
 const filters = reactive({ q: props.search || '', status: props.status || '' })
@@ -16,10 +17,11 @@ const alreadyScheduled = computed(() => targetMode.value === 'existing' && selec
 
 function filter() { router.get('/admin/words', filters, { preserveState: true, replace: true }) }
 function localDate(date = new Date()) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(date)
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 function openPlanDialog(word) {
   selectedWord.value = word
@@ -95,7 +97,7 @@ function displayDate(date) { return String(date).slice(5).replace('-', '/') }
             </template>
           </el-table-column>
           <el-table-column label="状态" width="100"><template #default="scope"><el-tag :type="scope.row.status === 'published' ? 'success' : 'info'" effect="light">{{ scope.row.status === 'published' ? '已发布' : '草稿' }}</el-tag></template></el-table-column>
-          <el-table-column label="最后更新" min-width="155"><template #default="scope">{{ scope.row.updated_at || '—' }}</template></el-table-column>
+          <el-table-column label="最后更新" min-width="155"><template #default="scope">{{ formatBeijingDateTime(scope.row.updated_at) || '—' }}</template></el-table-column>
           <el-table-column label="操作" width="170" fixed="right">
             <template #default="scope">
               <div class="row-actions">

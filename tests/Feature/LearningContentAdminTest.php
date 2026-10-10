@@ -55,6 +55,58 @@ class LearningContentAdminTest extends TestCase
         $this->assertSame($questionId, DB::table('grammar_questions')->where('grammar_lesson_id', $id)->value('id'));
     }
 
+    public function test_grammar_course_can_be_published_without_questions_and_all_questions_can_be_removed(): void
+    {
+        $this->admin();
+        $payload = [
+            'title' => 'Optional practice', 'level' => '基础语法',
+            'contentType' => 'richtext', 'contentHtml' => '<p>讲解正文</p>',
+            'questions' => [],
+        ];
+        $this->post('/admin/grammar', $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $id = (int) DB::table('grammar_lessons')->where('title', 'Optional practice')->value('id');
+        $this->post('/admin/grammar/'.$id.'/toggle')->assertRedirect()->assertSessionHasNoErrors();
+        $this->getJson('/api/v1/grammar-lessons/'.$id)->assertOk()->assertJsonPath('questionCount', 0);
+        $this->getJson('/api/v1/grammar-lessons/'.$id.'/questions')->assertOk()->assertJsonCount(0, 'items');
+
+        $withQuestion = $payload;
+        $withQuestion['questions'] = [[
+            'kind' => 'choice', 'prompt' => 'Choose one', 'options' => ['A', 'B'], 'answer' => 0,
+        ]];
+        $this->put('/admin/grammar/'.$id, $withQuestion)->assertRedirect()->assertSessionHasNoErrors();
+        $this->getJson('/api/v1/grammar-lessons/'.$id)->assertJsonPath('questionCount', 1);
+
+        $this->put('/admin/grammar/'.$id, $payload)->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame(0, DB::table('grammar_questions')->where('grammar_lesson_id', $id)->count());
+        $this->getJson('/api/v1/grammar-lessons/'.$id)->assertJsonPath('questionCount', 0);
+    }
+
+    public function test_reading_article_and_chapter_can_delete_all_questions(): void
+    {
+        $this->admin();
+        $seriesId = DB::table('series')->insertGetId([
+            'title' => 'Question-free series', 'status' => 'published',
+        ]);
+        foreach (['article', 'chapter'] as $kind) {
+            $itemId = DB::table('reading_items')->insertGetId([
+                'kind' => $kind, 'title' => 'Optional questions '.$kind,
+                'series_id' => $kind === 'chapter' ? $seriesId : null,
+                'chapter_no' => $kind === 'chapter' ? 1 : null,
+                'body_json' => json_encode([]), 'status' => 'published',
+            ]);
+            DB::table('reading_questions')->insert([
+                'reading_item_id' => $itemId, 'sort_order' => 1,
+                'kind' => 'choice', 'question_type' => '细节理解', 'prompt' => 'Choose one',
+                'options_json' => json_encode(['A', 'B']), 'answer' => '0',
+            ]);
+            $path = $kind === 'article' ? 'articles' : 'chapters';
+            $this->put('/admin/'.$path.'/'.$itemId.'/questions', ['questions' => []])
+                ->assertRedirect()->assertSessionHasNoErrors();
+            $this->assertSame(0, DB::table('reading_questions')->where('reading_item_id', $itemId)->count());
+            $this->getJson('/api/v1/reading-items/'.$itemId)->assertOk()->assertJsonPath('questionCount', 0);
+        }
+    }
+
     public function test_puzzle_editor_generates_valid_tokens_and_preserves_existing_progress(): void
     {
         $this->admin();

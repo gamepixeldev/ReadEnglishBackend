@@ -103,7 +103,7 @@
     @endif
 </div><aside class="form-stack">
     <section class="card"><div class="card-header"><h2>编辑提示</h2></div><div class="card-body"><p class="helper">文章保存后默认为草稿。发布和下架操作在文章列表中进行。</p></div></section>
-    @if($editing)<section class="card"><div class="card-header"><h2>文章信息</h2></div><div class="card-body"><div class="helper">ID：#{{ $article->id }}</div><div class="helper" style="margin-top:8px">最后更新：{{ $article->updated_at }}</div></div></section>@endif
+    @if($editing)<section class="card"><div class="card-header"><h2>文章信息</h2></div><div class="card-body"><div class="helper">ID：#{{ $article->id }}</div><div class="helper" style="margin-top:8px">最后更新：{{ \Illuminate\Support\Carbon::parse($article->updated_at, 'UTC')->setTimezone('Asia/Shanghai')->format('Y-m-d H:i:s') }}</div></div></section>@endif
 </aside></div>
 @endsection
 @push('head')<link rel="stylesheet" href="{{ asset('admin-assets/article-images.css') }}">@endpush

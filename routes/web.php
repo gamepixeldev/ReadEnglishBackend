@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\GrammarLessonController;
 use App\Http\Controllers\Admin\GrammarLevelController;
 use App\Http\Controllers\Admin\PuzzleSetController;
 use App\Http\Controllers\Admin\DailyWordPlanController;
+use App\Http\Controllers\Admin\FeedbackController;
 
 Route::get('/', function () {
     return response()->json(['service' => 'EnglishStudyAPI']);
@@ -18,6 +19,8 @@ Route::post('/admin/login', [AuthController::class, 'login'])->middleware('throt
 
 Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function (): void {
     Route::get('/', [ContentController::class, 'dashboard'])->name('admin.dashboard');
+    Route::get('/feedback', [FeedbackController::class, 'index'])->name('admin.feedback.index');
+    Route::put('/feedback/{id}', [FeedbackController::class, 'update'])->whereNumber('id')->name('admin.feedback.update');
     Route::get('/content', [ContentController::class, 'index'])->name('admin.content');
     Route::get('/articles', [ContentController::class, 'articles'])->name('admin.articles.index');
     Route::get('/articles/create', [ContentController::class, 'articleForm'])->name('admin.articles.create');

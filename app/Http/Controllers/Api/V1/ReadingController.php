@@ -31,6 +31,11 @@ class ReadingController extends Controller
         ]);
 
         $query = DB::table('reading_items')->where('status', 'published');
+        $query->where(function ($query): void {
+            $query->where('kind', '!=', 'chapter')->orWhereExists(function ($series): void {
+                $series->selectRaw('1')->from('series')->whereColumn('series.id', 'reading_items.series_id')->where('series.status', 'published');
+            });
+        });
         if (isset($filters['kind'])) {
             $query->where('kind', $filters['kind']);
         }
@@ -121,13 +126,13 @@ class ReadingController extends Controller
 
         return response()->json([
             'type' => $source->type,
-            'html' => $source->type === 'richtext'
+            'html' => filled($source->html)
                 ? (($source->format ?? 'html') === 'markdown'
                     ? $sanitizer->clean(\Illuminate\Support\Str::markdown($source->html ?? ''))
                     : $source->html)
                 : null,
             'format' => $source->format ?? 'html',
-            'url' => $source->type === 'officialAccount' ? $source->url : null,
+            'url' => $source->url,
             'title' => $source->title,
             'summary' => $source->summary,
         ]);
