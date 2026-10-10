@@ -1,6 +1,6 @@
 # API 契约 v1（第一阶段）
 
-配套模型见 [data-model-v1.md](./data-model-v1.md)。后端已在本项目开始分阶段实现；精读文章列表、详情、重点词汇、本文语法解析及阅读理解判题已接入测试内容，其余前端模块仍使用固定数据和 `uni` 本地存储。未实现的接口不能视为可用。
+配套模型见 [data-model-v1.md](./data-model-v1.md)。当前客户端各学习模块均通过 API 读取内容、提交进度与反馈；答题记录统一保存在练习尝试（practice attempt）中。
 
 ## 通用规则
 
@@ -9,7 +9,7 @@
 - 成功的单资源响应直接返回资源对象；错误统一 `{ "error": { "code": "...", "message": "..." } }`。错误码至少覆盖 `UNAUTHORIZED`、`NOT_FOUND`、`VALIDATION_ERROR`、`CONFLICT`、`CONTENT_NOT_PUBLISHED`。
 - 公开内容接口只返回已发布内容，不混入用户状态，便于缓存。`/me` 和写接口需要登录；身份由服务端会话确定，客户端不能传 `userId`。开发预览可用本地测试会话，不把测试身份带入生产。
 - 写接口以服务器时间为准。完成阅读、收藏、每日完成使用唯一约束保证重复请求安全；单词学习事件使用 `requestId` 保证网络重试幂等，但用户重新发起一次学习可以产生新的事件。
-- 题目的正确答案、拼句的正确词序不在初次获取题目的响应里返回；提交检查后才返回判定与解析。阅读/语法做题暂不持久化成绩，沿用静态版行为。
+- 题目的正确答案、拼句的正确词序不在初次获取题目的响应里返回；阅读和语法题通过登录后的练习尝试提交，服务端保存作答快照及成绩；拼句使用独立的句子检查与进度接口。
 
 ## 登录与首页
 
@@ -29,7 +29,7 @@
 | `GET /reading-items/{readingItemId}/words` | 本文重点词汇列表 | 按 `sortOrder` 排列，含 `wordId`；词条详情走统一单词接口。 |
 | `GET /reading-items/{readingItemId}/grammar-analysis` | 本文语法解析 | 返回该篇独立的 `contentSource` 富文本/公众号链接，不跳转独立语法课程列表。 |
 | `GET /reading-items/{readingItemId}/questions` | 阅读理解题 | 返回题干、选项、题型；不返回答案和解析。 |
-| `POST /reading-questions/{questionId}/check` | 检查单题 | 请求 `{ "answer": 1 }` 或填空字符串；返回 `correct`、`correctAnswer`、`explanation`；不新增学习记录。 |
+| `POST /me/practice-attempts`、`POST /me/practice-attempts/{attemptId}/answers` | 开始/继续阅读理解并提交答案 | 按文章保存可恢复的作答记录与结果；答案和解析在作答后返回。 |
 | `GET /me/reading-items/{readingItemId}/status` | 阅读完成状态 | `{ "completed": true, "completedAt": "..." }`。 |
 | `PUT /me/reading-items/{readingItemId}/completion` | 点击“阅读完成” | 幂等；只此操作写阅读完成与最近学习。返回完成状态。 |
 
@@ -83,7 +83,7 @@
 | `GET /grammar-lessons/{lessonId}` | 语法课程详情 | 课程的 `contentSource`、摘要及练习数。与文章语法解析无强关联。 |
 | `POST /me/grammar-lessons/{lessonId}/visit` | 进入详情时更新最近学习 | 幂等更新该课程的最近访问时间；不代表做题正确。 |
 | `GET /grammar-lessons/{lessonId}/questions` | 课程练习题 | 不返回正确答案。 |
-| `POST /grammar-questions/{questionId}/check` | 判题 | 返回正确与否、答案和解析；v1 不保存成绩。 |
+| `POST /me/practice-attempts`、`POST /me/practice-attempts/{attemptId}/answers` | 开始/继续语法练习并提交答案 | 按语法课程保存可恢复的作答记录与结果；答案和解析在作答后返回。 |
 
 ## 拼句
 
@@ -105,37 +105,8 @@
 | `GET /me/recent?category=reading\|grammar\|word\|puzzle&cursor=...` | 分模块记录列表 | 按最近时间倒序；返回目标稳定 ID、标题快照、状态/进度和 `nextCursor`。阅读含普通文章与小说章节。 |
 | `DELETE /me/recent` | 清空展示记录 | 只清空最近学习列表，不重置阅读完成、单词完成、收藏或拼句进度。 |
 
-## 内容管理接口（第一阶段）
-
-以下接口使用 `Authorization: Bearer <CONTENT_ADMIN_TOKEN>`。令牌通过服务端 `.env` 配置，绝不能放进 uni-app 前端包。未配置时接口返回 `503 ADMIN_NOT_CONFIGURED`；缺少或错误令牌返回 `401`。
-
-| 方法与路径 | 用途 | 关键返回/说明 |
-| --- | --- | --- |
-| `GET /admin/reading-items?kind=article&status=draft` | 管理文章列表 | 可按类型、状态筛选。 |
-| `POST /admin/reading-items` | 新建文章 | 只创建草稿；`body` 为段落数组，包含 `sentences` 与 `translation`。 |
-| `GET /admin/reading-items/{id}` | 查看编辑内容 | 返回草稿状态、正文、解析和重点词排序。 |
-| `PUT /admin/reading-items/{id}` | 编辑文章 | 只更新提交的字段。 |
-| `PUT /admin/reading-items/{id}/analysis` | 新建或更新本文解析 | 支持 `richtext` / `officialAccount`；富文本会在保存时做标签白名单清理。 |
-| `PUT /admin/reading-items/{id}/words` | 设置文章重点词及顺序 | `{ "wordIds": [12, 8, 21] }`；该接口会整体替换此文章的重点词关联顺序。 |
-| `POST /admin/reading-items/{id}/publish` | 发布文章 | 要求正文和版权来源说明完整；同时发布已绑定的解析。 |
-| `POST /admin/reading-items/{id}/unpublish` | 下架文章 | 改回草稿状态，公开接口不再返回。 |
-| `GET /admin/words?status=draft&q=...` | 管理单词列表 | 支持状态和拼写搜索。 |
-| `POST /admin/words` | 新建单词 | 只创建草稿。 |
-| `GET /admin/words/{id}` | 查看单词及详解 | 用于载入已有内容进行编辑。 |
-| `PUT /admin/words/{id}` | 编辑单词基础资料 | 音标、词性、释义、发音资源等。 |
-| `PUT /admin/words/{id}/detail` | 新建或更新单词详解 | 支持富文本或公众号链接。 |
-| `POST /admin/words/{id}/publish` / `unpublish` | 发布或下架单词 | 发布需先添加详解；单词与详解同时变更状态。 |
-
-当前可视化后台已覆盖精读文章、段落、文章解析、重点词关联/排序，以及单词和单词详解的编辑与发布；使用 Laravel session 登录。上述 API 另由 `CONTENT_ADMIN_TOKEN` 保护。阅读题编辑、系列/章节维护、独立语法课程、拼句和每日计划管理仍待实现。富文本允许的标签有限；如果需要表格、图片或复杂排版，应先扩充并审查清理规则再投入内容。
-
-## 前端替换顺序与验收
-
-1. 建统一 API 客户端及开发环境配置，保留当前固定数据作为开发预览夹具；接口错误、空数据和加载状态统一处理。
-2. 替换精读/书架/目录/详情和配套内容。核对普通文章与章节共用详情，阅读完成只在用户点击后记录。
-3. 替换每日单词、精读词汇、词条详情、收藏与拼写完成。核对重复单词、只读入口和“直接拼写不记进度”。
-4. 替换独立语法、文章语法解析、阅读/语法判题。核对两种语法内容没有串联。
-5. 替换拼句列表、题目与进度，再接最近学习分页。重点验收 `2/3 → 第 3 句`、从头开始、短列表加载与清空记录不清空进度。
+管理后台统一通过 `/admin` 网页使用 Laravel session 登录；不再提供独立的 bearer-token 内容管理 API。后台可维护精读文章、外刊系列与章节、阅读题、文章解析、重点词、单词详解、独立语法课程、拼句和每日单词计划。富文本允许的标签有限；若需表格、图片或复杂排版，应先扩充并审查清理规则。
 
 广告提示是后续独立任务：当前广告位尚未配置。正式启用时，提示答案应在广告完成且服务端验证后下发；不要仅凭前端的“已看完”状态解锁。这不阻塞基础内容与学习 API 的开发。
 
-已确定 Laravel 13 / PHP 8.4 / MySQL 8.4 LTS / 自有云服务器。用户登录方式和是否迁移测试期本地记录仍待确认。后端已完成第一批迁移、示例数据与部分公开接口；其余接口及前端对接继续按本契约推进。
+当前客户端各学习模块均由后端提供内容与持久化进度；练习作答统一使用 practice-attempt 接口。部署、数据库版本及域名以 `BACKEND.md` 和 `local-first-deployment.md` 中的实际环境说明为准。

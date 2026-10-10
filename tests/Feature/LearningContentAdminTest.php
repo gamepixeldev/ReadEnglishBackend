@@ -49,8 +49,6 @@ class LearningContentAdminTest extends TestCase
         $this->post('/admin/grammar/'.$id.'/toggle')->assertRedirect();
         $this->getJson('/api/v1/grammar-lessons/'.$id)->assertOk()->assertJsonPath('contentSource.type', 'richtext');
         $questionId = DB::table('grammar_questions')->where('grammar_lesson_id', $id)->value('id');
-        $this->postJson('/api/v1/grammar-questions/'.$questionId.'/check', ['answer' => 1])
-            ->assertOk()->assertJsonPath('correct', true);
         $this->put('/admin/grammar/'.$id, $payload)->assertRedirect();
         $this->assertSame($questionId, DB::table('grammar_questions')->where('grammar_lesson_id', $id)->value('id'));
     }

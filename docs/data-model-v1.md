@@ -56,7 +56,7 @@
 
 微信登录用户不要求邮箱或密码，因此 `users.email` 和 `users.password` 允许为空；后台管理员仍使用邮箱和密码登录。`users.name` 和 `users.avatar_url` 可空，等用户主动设置后再保存；资料不作为身份凭据。`provider_app_id` 在新增身份时必须填写，后端用自己配置的 AppID，不接受客户端自行指定。
 
-当前静态版的阅读理解、独立语法练习不单独保存答题成绩；v1 不新增成绩表。每日单词的“直接拼写”只是练习，不写 `word_learning_events`、`daily_word_completions` 或最近学习。若以后需要错题本/成绩统计，再单独设计 `question_attempts`。
+阅读理解与独立语法练习通过练习尝试及答案表保存每次作答快照、判定结果和完成成绩。每日单词的“直接拼写”只是客户端练习，不写 `word_learning_events`、`daily_word_completions` 或最近学习。
 
 ## 发布与编辑约束
 
@@ -76,4 +76,4 @@
 | `dailyWordIndexes()` | `daily_word_plans`、`daily_word_plan_items` | 生产环境由后台发布每日清单，不再按本地数组轮换。 |
 | `uni` 本地学习记录 | 上述用户记录表 | 对接时单独决定是否一次性导入测试期本地记录；不能把数组下标原样上传。 |
 
-已确定：后端使用 Laravel 13 + PHP 8.4；本地开发使用 MySQL 8.0 独立数据库，首次上线目标为 MySQL 8.4 LTS，部署在用户自有云服务器。首次可从干净内容库导出并导入线上空库；上线后不能再用本地整库覆盖线上用户数据。已在本项目的 `database/migrations/` 创建迁移，并在本地 MySQL 8.0 项目专用数据库中运行成功；自动化接口测试使用 SQLite，完整 MySQL 集成测试仍待进行。正式用户登录方式和测试期本地记录是否迁移尚未确定。详见 [本地开发与上线流程](./local-first-deployment.md)。
+后端使用 Laravel 13 + PHP 8.4；本地开发数据库为独立 MySQL 8.0，部署在用户自有云服务器。自动化接口测试使用 SQLite；线上 MySQL 版本兼容性需在部署目标环境中验证。上线后不可用本地整库覆盖线上用户数据。详见 [本地开发与上线流程](./local-first-deployment.md)。

@@ -159,44 +159,6 @@ class ReadingController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function checkQuestion(Request $request, int $id): JsonResponse
-    {
-        $question = DB::table('reading_questions as q')
-            ->join('reading_items as r', 'r.id', '=', 'q.reading_item_id')
-            ->where('q.id', $id)->where('r.status', 'published')
-            ->where(function ($query): void {
-                $query->where('r.kind', '!=', 'chapter')->orWhereExists(function ($series): void {
-                    $series->selectRaw('1')->from('series')->whereColumn('series.id', 'r.series_id')->where('series.status', 'published');
-                });
-            })
-            ->select('q.*')->first();
-        if (! $question) {
-            return $this->notFound();
-        }
-
-        $data = $request->validate(['answer' => 'required']);
-        if ($question->kind === 'choice') {
-            $options = json_decode($question->options_json, true) ?: [];
-            if (! is_int($data['answer']) || $data['answer'] < 0 || $data['answer'] >= count($options)) {
-                return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '请选择有效选项']], 422);
-            }
-            $correct = $data['answer'] === (int) $question->answer;
-            $correctAnswer = (int) $question->answer;
-        } else {
-            if (! is_string($data['answer'])) {
-                return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '请输入答案']], 422);
-            }
-            $correct = mb_strtolower(trim($data['answer'])) === mb_strtolower(trim($question->answer));
-            $correctAnswer = $question->answer;
-        }
-
-        return response()->json([
-            'correct' => $correct,
-            'correctAnswer' => $correctAnswer,
-            'explanation' => $question->explanation,
-        ]);
-    }
-
     public function seriesIndex(Request $request): JsonResponse
     {
         $filters = $request->validate([

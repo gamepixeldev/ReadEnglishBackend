@@ -94,39 +94,6 @@ class GrammarController extends Controller
         return response()->json(['items' => $items]);
     }
 
-    public function checkQuestion(Request $request, int $id): JsonResponse
-    {
-        $question = DB::table('grammar_questions as q')
-            ->join('grammar_lessons as g', 'g.id', '=', 'q.grammar_lesson_id')
-            ->where('q.id', $id)->where('g.status', 'published')
-            ->select('q.*')->first();
-        if (! $question) {
-            return $this->notFound();
-        }
-
-        $data = $request->validate(['answer' => 'required']);
-        if ($question->kind === 'choice') {
-            $options = json_decode($question->options_json, true) ?: [];
-            if (! is_int($data['answer']) || $data['answer'] < 0 || $data['answer'] >= count($options)) {
-                return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '请选择有效选项']], 422);
-            }
-            $correct = $data['answer'] === (int) $question->answer;
-            $correctAnswer = (int) $question->answer;
-        } else {
-            if (! is_string($data['answer'])) {
-                return response()->json(['error' => ['code' => 'VALIDATION_ERROR', 'message' => '请输入答案']], 422);
-            }
-            $correct = mb_strtolower(trim($data['answer'])) === mb_strtolower(trim($question->answer));
-            $correctAnswer = $question->answer;
-        }
-
-        return response()->json([
-            'correct' => $correct,
-            'correctAnswer' => $correctAnswer,
-            'explanation' => $question->explanation,
-        ]);
-    }
-
     private function notFound(): JsonResponse
     {
         return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '语法内容不存在']], 404);

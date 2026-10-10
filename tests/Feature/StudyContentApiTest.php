@@ -37,8 +37,6 @@ class StudyContentApiTest extends TestCase
         $this->seed(SampleReadingSeeder::class);
         $articleId = DB::table('reading_items')->where('slug', 'sample-blue-umbrella')->value('id');
         $wordId = DB::table('words')->where('slug', 'sample-word-kindness')->value('id');
-        $questionId = DB::table('reading_questions')->where('reading_item_id', $articleId)
-            ->where('sort_order', 1)->value('id');
 
         $this->assertIsInt($articleId);
         $this->assertIsInt($wordId);
@@ -56,8 +54,6 @@ class StudyContentApiTest extends TestCase
             ->assertJsonPath('contentSource.type', 'richtext');
         $this->getJson('/api/v1/reading-items/'.$articleId.'/questions')->assertOk()
             ->assertJsonCount(4, 'items')->assertDontSee('correctAnswer')->assertDontSee('explanation');
-        $this->postJson('/api/v1/reading-questions/'.$questionId.'/check', ['answer' => 1])
-            ->assertOk()->assertJsonPath('correct', true);
         $this->assertSame(1, DB::table('reading_analyses')->count());
         $this->assertSame(8, DB::table('word_details')->count());
     }
@@ -111,10 +107,10 @@ class StudyContentApiTest extends TestCase
         $this->getJson('/api/v1/reading-items/'.$draftId.'/grammar-analysis')->assertNotFound();
     }
 
-    public function test_question_answer_is_hidden_until_check(): void
+    public function test_reading_question_answers_are_not_exposed_to_public_content_api(): void
     {
         $articleId = $this->reading('first', 'published', 1);
-        $questionId = DB::table('reading_questions')->insertGetId([
+        DB::table('reading_questions')->insert([
             'reading_item_id' => $articleId,
             'sort_order' => 1,
             'kind' => 'choice',
@@ -126,10 +122,6 @@ class StudyContentApiTest extends TestCase
 
         $this->getJson('/api/v1/reading-items/'.$articleId.'/questions')->assertOk()
             ->assertDontSee('correctAnswer')->assertDontSee('explanation')->assertDontSee('"answer"');
-        $this->postJson('/api/v1/reading-questions/'.$questionId.'/check', ['answer' => 0])
-            ->assertOk()->assertJsonPath('correct', false)->assertJsonPath('correctAnswer', 1);
-        $this->postJson('/api/v1/reading-questions/'.$questionId.'/check', ['answer' => 9])
-            ->assertUnprocessable();
     }
 
     public function test_word_detail_requires_published_word_and_detail(): void
@@ -158,7 +150,7 @@ class StudyContentApiTest extends TestCase
             'grammar_lesson_id' => $lessonId, 'type' => 'richtext',
             'html' => '<p>Past tense</p>', 'status' => 'published',
         ]);
-        $grammarQuestionId = DB::table('grammar_questions')->insertGetId([
+        DB::table('grammar_questions')->insert([
             'grammar_lesson_id' => $lessonId, 'sort_order' => 1,
             'kind' => 'choice', 'prompt' => 'Choose one.',
             'options_json' => json_encode(['go', 'went']), 'answer' => '1',
@@ -180,8 +172,6 @@ class StudyContentApiTest extends TestCase
             ->assertJsonPath('contentSource.html', '<p>Past tense</p>');
         $this->getJson('/api/v1/grammar-lessons/'.$lessonId.'/questions')->assertOk()
             ->assertDontSee('"answer"');
-        $this->postJson('/api/v1/grammar-questions/'.$grammarQuestionId.'/check', ['answer' => 1])
-            ->assertOk()->assertJsonPath('correct', true);
         $this->getJson('/api/v1/puzzle-sets/'.$setId)->assertOk()
             ->assertJsonPath('sentences.0.tokens.0.id', 'token-2')
             ->assertDontSee('answerText')->assertDontSee('answer_text');
