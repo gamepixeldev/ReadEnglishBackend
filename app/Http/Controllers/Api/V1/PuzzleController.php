@@ -45,6 +45,7 @@ class PuzzleController extends Controller
                 'id' => $sentence->id,
                 'sortOrder' => $sentence->sort_order,
                 'promptCn' => $sentence->prompt_cn,
+                'answerText' => $sentence->answer_text,
                 'tokens' => json_decode($sentence->tokens_json, true) ?: [],
             ]);
 
@@ -74,18 +75,6 @@ class PuzzleController extends Controller
             'correct' => $submitted === $answerIds,
             'positions' => array_map(fn ($id, $index) => $id === $answerIds[$index], $submitted, array_keys($submitted)),
         ]);
-    }
-
-    public function hint(int $id): JsonResponse
-    {
-        $sentence = DB::table('puzzle_sentences as p')
-            ->join('puzzle_sets as s', 's.id', '=', 'p.puzzle_set_id')
-            ->where('p.id', $id)->where('s.status', 'published')->select('p.answer_text')->first();
-        if (! $sentence) {
-            return response()->json(['error' => ['code' => 'NOT_FOUND', 'message' => '句子不存在']], 404);
-        }
-
-        return response()->json(['answer' => $sentence->answer_text]);
     }
 
     private function summary(object $set): array

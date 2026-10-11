@@ -9,6 +9,7 @@ use App\Http\Controllers\Admin\GrammarLevelController;
 use App\Http\Controllers\Admin\PuzzleSetController;
 use App\Http\Controllers\Admin\DailyWordPlanController;
 use App\Http\Controllers\Admin\FeedbackController;
+use App\Http\Controllers\Admin\RewardedAdController;
 
 Route::get('/', function () {
     return response()->json(['service' => 'EnglishStudyAPI']);
@@ -20,6 +21,10 @@ Route::post('/admin/login', [AuthController::class, 'login'])->middleware('throt
 Route::prefix('admin')->middleware(['auth', 'content-admin'])->group(function (): void {
     Route::get('/', [ContentController::class, 'dashboard'])->name('admin.dashboard');
     Route::get('/feedback', [FeedbackController::class, 'index'])->name('admin.feedback.index');
+    Route::get('/rewarded-ads', [RewardedAdController::class, 'settings'])->name('admin.rewarded-ads.settings');
+    Route::put('/rewarded-ads', [RewardedAdController::class, 'saveSettings'])->name('admin.rewarded-ads.update');
+    Route::get('/users', [RewardedAdController::class, 'users'])->name('admin.users.index');
+    Route::put('/users/{id}/rewarded-ads', [RewardedAdController::class, 'updateUser'])->whereNumber('id')->name('admin.users.rewarded-ads.update');
     Route::put('/feedback/{id}', [FeedbackController::class, 'update'])->whereNumber('id')->name('admin.feedback.update');
     Route::get('/content', [ContentController::class, 'index'])->name('admin.content');
     Route::get('/articles', [ContentController::class, 'articles'])->name('admin.articles.index');

@@ -31,6 +31,7 @@ function closeSidebar() { document.body.classList.remove('sidebar-open'); }
       </nav>
       <div class="nav-section">用户服务</div>
       <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component.startsWith('Admin/Feedback')}" href="/admin/feedback"><span class="nav-icon">✉</span>用户反馈</Link></nav>
+      <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component.startsWith('Admin/RewardedAds')}" href="/admin/rewarded-ads"><span class="nav-icon">▶</span>激励广告</Link><Link class="nav-item" :class="{active: $page.component === 'Admin/RewardedAds/Users'}" href="/admin/users"><span class="nav-icon">◉</span>用户广告策略</Link></nav>
       <div class="nav-section">账号</div>
       <nav class="side-nav"><Link class="nav-item" :class="{active: $page.component === 'Admin/Password'}" href="/admin/password"><span class="nav-icon">⚙</span>修改密码</Link></nav>
       <div class="sidebar-bottom"><span class="online-dot"></span> 管理服务运行中</div>

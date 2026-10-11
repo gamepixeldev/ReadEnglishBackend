@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\StudyProgressController;
 use App\Http\Controllers\Api\V1\DailyWordController;
 use App\Http\Controllers\Api\V1\FeedbackController;
 use App\Http\Controllers\Api\V1\PracticeAttemptController;
+use App\Http\Controllers\Api\V1\RewardedHintController;
 use App\Http\Middleware\AuthenticateMobileToken;
 use Illuminate\Support\Facades\Route;
 
@@ -16,11 +17,13 @@ Route::pattern('id', '[0-9]+');
 
 Route::prefix('v1')->group(function (): void {
     Route::post('auth/wechat', [MobileAuthController::class, 'wechat'])->middleware('throttle:10,1');
+    Route::get('rewarded-hint-config', [RewardedHintController::class, 'config']);
     Route::post('feedback', [FeedbackController::class, 'store'])->middleware('throttle:5,1');
     Route::post('feedback/mine', [FeedbackController::class, 'mine'])->middleware('throttle:30,1');
     Route::post('feedback/{id}/mine', [FeedbackController::class, 'showMine'])->whereNumber('id')->middleware('throttle:30,1');
     Route::middleware(AuthenticateMobileToken::class)->group(function (): void {
         Route::get('auth/me', [MobileAuthController::class, 'me']);
+        Route::get('me/rewarded-hint-config', [RewardedHintController::class, 'config']);
         Route::patch('auth/profile', [MobileAuthController::class, 'updateProfile']);
         Route::post('auth/avatar', [MobileAuthController::class, 'uploadAvatar']);
         Route::post('auth/logout', [MobileAuthController::class, 'logout']);
@@ -54,5 +57,4 @@ Route::prefix('v1')->group(function (): void {
     Route::get('puzzle-sets', [PuzzleController::class, 'index']);
     Route::get('puzzle-sets/{id}', [PuzzleController::class, 'show']);
     Route::post('puzzle-sentences/{id}/check', [PuzzleController::class, 'check']);
-    Route::get('puzzle-sentences/{id}/hint', [PuzzleController::class, 'hint']);
 });
